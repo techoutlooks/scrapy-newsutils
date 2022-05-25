@@ -1,0 +1,10 @@
+Scrapy
+newspaper3k
+nltk
+pycountry
+pymongo
+Pillow
+image-quality
+schedule
+ordered-set
+rich
