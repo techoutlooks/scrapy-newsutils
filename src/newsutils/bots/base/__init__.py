@@ -13,7 +13,7 @@ from ..default_settings import SHORT_LINK, TYPE, UNKNOWN, TITLE, EXCERPT, TEXT
 from ..funcs import compose, add_fullstop
 
 
-class ConfigMixin(TaskLoggerMixin):
+class BaseConfig(TaskLoggerMixin):
     # FIXME: fields polluting the namespace,
     #    use DataClassCard in AppSettings? or set attrs here from snake_cased settings?
 
@@ -27,8 +27,13 @@ class ConfigMixin(TaskLoggerMixin):
     # DATABASE FIELDS
     # `item_id_field`: Identifies crawled items uniquely. NOT the database id.
     item_id_field = settings['POSTS']['ITEM_ID_FIELD']
-    db_uri = settings["CRAWL_DB_URI"]
     db_id_field = settings['POSTS']['DB_ID_FIELD']
+    db_uri = settings["CRAWL_DB_URI"]
+
+
+class PostConfig(BaseConfig):
+
+    settings = BaseConfig.settings
 
     # NLP FIELDS
     caption_field = settings['POSTS']['CAPTION_FIELD']
@@ -79,7 +84,7 @@ class ConfigMixin(TaskLoggerMixin):
         """
 
         def filter_metapost(post: Post):
-            """ Decision to filter out a metapost """
+            """ Should filter out the current post if it is a metapost ? """
             if post.is_meta and \
                     not cls.settings['POSTS']['NLP_USES_META']:
                 return
@@ -112,14 +117,17 @@ class ConfigMixin(TaskLoggerMixin):
         }
 
 
-class Day(Collection, ConfigMixin):
+class Day(Collection, PostConfig):
     """
-    Daily database management facility for `Post` items.
-    Requires `ConfigMixin`.
+    Database management facility for daily post items.
+    Requires `PostConfig`.
     """
+
+    posts = []
 
     def __init__(self, day):
         super().__init__(day, db_or_uri=self.db_uri)
+        self.posts = list(self.get_posts())
 
     @property
     def date(self):  # str(self) -> the collection's name
@@ -136,6 +144,47 @@ class Day(Collection, ConfigMixin):
         posts = filter(None, posts)
         return posts
 
+    def __getitem__(self, lookup):
+        """
+        Look up for post in loaded posts
+        
+        Usage: all below example return the found `Post` instance:
+        >>> day[db_id]; day[post_index]; day[post]
+
+        :param int or ObjectId or Post lookup: index, database id or post for post
+            assumes key:str is str(ObjectId)
+        :returns: found Post instance
+        :rtype: Post
+        """
+
+        if isinstance(lookup, (str, ObjectId)):
+            return next(filter(lambda p: str(p[self.db_id_field]) == str(lookup), self.posts), None)
+        if isinstance(lookup, Post):
+            return lookup if lookup in self.posts else None
+        if isinstance(lookup, int):
+            post = None
+            try:
+                post = self.posts[lookup]
+            except KeyError:
+                pass
+            return post
+
+    def __setitem__(self, lookup, value):
+        """
+        Update post identified by lookup inside **self.posts**.
+
+        Usage:
+        >>> day[db_id] = new_post; day[post_index] = new_post; day[post] = new_post
+
+        :param int or ObjectId or Post lookup: index, database id or post for post
+            assumes key:str is str(ObjectId)
+        :param Post value: new post value to set
+        """
+        # 1) find index to update from lookup
+        # 2) perform destructive update
+        i = self.posts.index(self[lookup])
+        self.posts[i] = value
+
     def save(self, post: Post):
         """ Updates, or creates a new post/metapost if `post` has no db id value.
         Uses `ItemAdapter` for proper fields checking vs. `Post` Item class.
@@ -148,9 +197,10 @@ class Day(Collection, ConfigMixin):
             f"{post.get(self.db_id_field, post[SHORT_LINK])} to db: " \
             f"{detail}"
 
-        self.log_started('')
-
+        self.log_started(log_msg, '...')
         try:
+            
+            # save
             adapter = ItemAdapter(post)
             _id = ObjectId(adapter.item.get(self.db_id_field, None))
             adapter.update({self.db_id_field: _id})
@@ -158,10 +208,18 @@ class Day(Collection, ConfigMixin):
                 {'_id': {'$eq': _id}}, {"$set": adapter.asdict()}, upsert=True)
             _post, saved = adapter.item, r.modified_count
 
+            # also, refect update in mem cache according to strategy,
+            # iff the db update was successful. eg. don't update metaposts
+            # if they were never loaded in the first place (metaposts filtered)
+            if saved:
+                if self.strategy["filter_metapost"](_post):
+                    self[_id] = _post
+            
+            # log
             op = 'inserted' if r.upserted_id else 'updated'
             self.log_ok(log_msg, f"{op} ({r.modified_count}/{r.matched_count})")
 
         except Exception as exc:
-            self.log_failed(log_msg, exc)
+            self.log_failed(log_msg, exc, '')
 
         return _post, saved

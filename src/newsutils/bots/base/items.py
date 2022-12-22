@@ -3,12 +3,12 @@ import collections
 import scrapy
 from scrapy.item import ItemMeta
 
-from news_utils import settings
+from newsutils.bots import settings
 
 
 # basic field type detection heuristic from field names that
 # follow naming conventions: is_* -> bool, *s -> plural, etc.
-from news_utils.default_settings import META_POST
+from newsutils.bots.default_settings import META_POST, TYPE
 
 is_plural = lambda w: w.endswith('s') and not w.endswith('ss')
 is_bool = lambda w: w.startswith('is_')
@@ -16,8 +16,12 @@ is_bool = lambda w: w.startswith('is_')
 
 class ItemValue(collections.UserDict):
     """
-    Provider for values to be set on the `scrapy.Item` instances.
-    Impl. as a dict container in similar manner as `collections.defaultdict`
+    Provider for values to be set on the `scrapy.Item` instances,
+    Impl. as a dict container in similar manner as `collections.defaultdict`,
+    but able to initialize default values by guessing their resp. key type,
+    ie.
+        pluralized key (eg. 'authors') ->  initialized to []
+        key starting with `is_` (eg. 'is_draft') -> bool, initialized to False
 
     Priority for resolving values :
         inventory -> heuristics -> default_factory -> raises KeyError
@@ -53,6 +57,9 @@ class ItemValue(collections.UserDict):
 
 
 class Item(scrapy.Item):
+    """ Enhanced Item
+        - Supports setting default values for scrapy fields,
+    """
     def __init__(self, *args, defaults: ItemValue = None, **kwargs):
         super().__init__(*args, **kwargs)
 
@@ -60,7 +67,8 @@ class Item(scrapy.Item):
         if defaults:
             for n in list(self.fields):
                 if isinstance(self.fields[n], scrapy.Field):
-                    self[n] = defaults[n]
+                    self[n] = self.get(n, defaults[n])
+
 
 # ==[ AUTHOR ]==
 
@@ -74,7 +82,7 @@ class Author(Item):
 
 botauthor = ItemValue(ItemValue.NO_DEFAULT, {
     "name": "Rob. O.",
-    "profile_image": "img/bot-image.svg",
+    "profile_image": settings['POSTS']['BRAND']['BOT_IMAGE_URL'],
     "role": "NLP",
 })
 
@@ -93,14 +101,14 @@ class Paper(Item):
     logo_url = scrapy.Field()
 
 
-arisenews = ItemValue(ItemValue.NO_DEFAULT, {
+thispaper = ItemValue(ItemValue.NO_DEFAULT, {
     "brand": "ARISEnews",
     "description": "Arise, Shine !",
-    "logo_url": "logo.png"
+    "logo_url": settings['POSTS']['BRAND']['LOGO_URL']
 })
 
 # AriseNews paper
-ARISENEWS = Paper(defaults=arisenews)
+THIS_PAPER = Paper(defaults=thispaper)
 
 
 # ==[ POST ]==
@@ -124,7 +132,11 @@ defaultpost = ItemValue(ItemValue.NO_DEFAULT, {
     "version": 1,
     "title": "",
     "text": "",
-    "excerpt": ""
+    "excerpt": "",
+
+    # not guessed are plural fields by heuristic
+    # cf. `ItemValue.is_plural()`
+    "related": []
 })
 
 
@@ -156,11 +168,15 @@ class Post(Item, metaclass=PostMeta):
 
     @property
     def is_meta(self):
-        return self["type"] == META_POST
+        return self[TYPE].startswith(META_POST)
 
 
 # creates a post with default values
-mk_defaultpost = lambda: Post(defaults=defaultpost)
+# mk_defaultpost = lambda: Post(defaults=defaultpost)
+mk_post = lambda *args, **kwargs: Post(*args, defaults=defaultpost, **kwargs)
+
+
+
 
 
 

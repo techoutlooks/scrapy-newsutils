@@ -6,6 +6,7 @@ from .default_settings import Posts, \
 # (both project and default) existing settings taking precedence.
 settings = Posts()('settings', 'scrapy.settings.default_settings')
 
+
 # == [ COMPUTED SETTINGS] ==
 # load `computed` settings dynamically from env_vars, settings.py
 # `editable` settings are typically computed based on other configurable settings

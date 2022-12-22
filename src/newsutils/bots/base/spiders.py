@@ -7,11 +7,11 @@ from newspaper import Article, build
 from scrapy.spiders import Rule, CrawlSpider
 from scrapy.linkextractors import LinkExtractor
 
-from .items import Post, Author, Paper
-from news_utils.base.logging import LoggingMixin, \
+from .items import Post, Author, Paper, mk_post
+from newsutils.bots.base.logging import LoggingMixin, \
     FAILED, OK, PADDING
-from news_utils.default_settings import TYPE
-from news_utils.logo import parse_logo
+from newsutils.bots.default_settings import TYPE
+from newsutils.bots.logo import parse_logo
 from daily_query.helpers import parse_dates
 
 
@@ -105,8 +105,7 @@ class PostCrawlerMixin(LoggingMixin):
         # compute filter dates for crawling
         self.filter_dates = parse_dates(
             days_from=self.days_from, days_to=self.days_to,
-            days=self.days,
-        )
+            days=self.days)
 
     @property
     def country(self):
@@ -136,7 +135,8 @@ class PostCrawlerMixin(LoggingMixin):
                       f"parsing (%d/%d) image(s) for post {short_link}"
                       % (len(images), len(list(a.images))))
 
-        post = Post(
+        # like Post(), but with the defaults presets
+        post = mk_post(
             country=self.country.alpha_2,
             link=a.url,
             short_link=short_link,

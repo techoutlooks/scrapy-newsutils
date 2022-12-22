@@ -3,7 +3,7 @@ import copy
 from importlib import import_module
 from typing import List
 
-from news_utils.funcs import camel_to_snake, get_env_variable
+from newsutils.bots.funcs import camel_to_snake, get_env_variable
 
 
 def configure(default_settings: dict, project_settings, project_default_settings,

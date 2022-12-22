@@ -1,5 +1,5 @@
 from .funcs import get_env_variable
-from news_utils.appsettings import AppSettings
+from newsutils.bots.appsettings import AppSettings
 
 
 # immutable Post field names
@@ -41,9 +41,10 @@ _NLP_BASE_FIELDS_CONF = {
 }
 
 
-# meta post type
-META_POST = 'metapost'
-UNKNOWN = "unknown"
+#
+META_POST = 'metapost'      # meta post type
+UNKNOWN = "N/A"         # unknown values
+
 
 # defaults for configurable fields
 # TODO?: prefix with `DEFAULT_` ??
@@ -57,19 +58,24 @@ class Posts(AppSettings):
 
     LOGGING = False
 
-    LOG_FORMATTER = 'news_utils.logformatter.LogFormatter'
+    LOG_FORMATTER = 'bots.logformatter.LogFormatter'
 
     ITEM_PIPELINES = {
-        'news_utils.pipelines.FilterDate': 100,
-        'news_utils.pipelines.CheckEdits': 110,
-        'news_utils.pipelines.DropLowQualityImages': 120,
-        'news_utils.pipelines.SaveToDb': 300
+        'bots.pipelines.FilterDate': 100,
+        'bots.pipelines.CheckEdits': 110,
+        'bots.pipelines.DropLowQualityImages': 120,
+        'bots.pipelines.SaveToDb': 300
     }
 
     # TODO: replace MongoDB with CouchDB
     # MongoDB only is supported. This is temporary.
     # BasePipeline's `get_setting` raises an exception if settings are not defined.
     CRAWL_DB_URI = 'mongodb://localhost:27017/scraped_news_db'
+
+    BRANDING = {
+        "BOT_IMAGE_URL": None,
+        "LOGO_URL": None
+    }
 
     POSTS = {
 
@@ -92,7 +98,7 @@ class Posts(AppSettings):
         # section defines inputs to the NLP strategy that runs nlp tasks
         # **strategy** : decision made by the `nlp.py` module based on below inputs
         # **tasks** : `similarity`, `summary`, `metapost` generation.
-        # NLP_USES_META: include metaposts into NLP tasks inputs? False, uses only regular type posts
+        # NLP_USES_META: also add metaposts (type==META_POST) as inputs to NLP tasks?
         # SUMMARY_USES_NLP: (iff !metapost type), use text from `excerpt` field instead of `text` field?
         # META_USES_NLP: metapost generation: use text from `caption` field instead of `title` field?
         "NLP_USES_META": False,

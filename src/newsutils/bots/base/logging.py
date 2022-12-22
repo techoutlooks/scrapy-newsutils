@@ -6,7 +6,7 @@ from typing import List, Callable
 
 from rich.console import OverflowMethod
 from rich.logging import RichHandler
-from news_utils.console import make_logger
+from newsutils.bots.console import make_logger
 
 from ..console import console
 

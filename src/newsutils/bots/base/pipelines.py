@@ -6,7 +6,7 @@ from scrapy.exceptions import DropItem
 from .items import Post
 from daily_query.helpers import mk_datetime
 
-from . import ConfigMixin, Day
+from . import PostConfig, Day
 from ..base.logging import PADDING
 
 
@@ -15,7 +15,7 @@ __all__ = [
 ]
 
 
-class PipelineMixin(ConfigMixin):
+class PipelineMixin(PostConfig):
     """
     Foundational block for building pipelines
     """
@@ -120,6 +120,8 @@ class BasePostPipeline(PipelineMixin, abc.ABC):
         else:
             self.post = item
             self.post_time = mk_datetime(item.get('publish_time'))
+            # FIXME: don't init a Day() and read entire collection that
+            #   possible changed every time a pipeline is loaded !
             self.day = self.get_day()
             return self.process_post()
 

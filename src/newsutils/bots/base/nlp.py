@@ -2,21 +2,21 @@ from bson import ObjectId
 
 from daily_query.helpers import mk_datetime
 
-from news_utils import add_fullstop
-from news_utils.base import ConfigMixin, Day
+from newsutils.bots import add_fullstop
+from newsutils.bots.base import PostConfig, Day
 from newsnlp import \
     TextSummarizer, TitleSummarizer, Categorizer, TfidfVectorizer
 
-from news_utils.base.items import Post, mk_defaultpost, BOT, ARISENEWS
-from news_utils.default_settings import \
-    EXCERPT, TITLE, TEXT, META_POST, SCORE, COUNTRY, TYPE, AUTHORS, PUBLISH_TIME, \
-    MODIFIED_TIME, IMAGES, VIDEOS, TAGS, IS_DRAFT, IS_SCRAP, KEYWORDS, TOP_IMAGE, PAPER
-from news_utils.funcs import wordcount, uniquedicts, dictdiff
+from newsutils.bots.base.items import Post, mk_post, BOT, THIS_PAPER
+from newsutils.bots.default_settings import \
+    TITLE, META_POST, SCORE, COUNTRY, TYPE, AUTHORS, PUBLISH_TIME, \
+    MODIFIED_TIME, IMAGES, VIDEOS, TAGS, IS_DRAFT, IS_SCRAP, KEYWORDS, TOP_IMAGE, PAPER, UNKNOWN
+from newsutils.bots.funcs import wordcount, uniquedicts, dictdiff
 
 CATEGORY_NOT_FOUND = 'N/A'
 
 
-class DayNlp(Day, ConfigMixin):
+class DayNlp(Day, PostConfig):
     """
     Helper to perform NLP on day posts.
 
@@ -24,7 +24,7 @@ class DayNlp(Day, ConfigMixin):
     """
 
     lang = "fr"
-    strategy = ConfigMixin.strategy
+    strategy = PostConfig.strategy
 
     posts: [Post] = None
 
@@ -37,9 +37,6 @@ class DayNlp(Day, ConfigMixin):
             # tfidf, (text, title, category)-summarization, meta-summarization
             similarity=0, summary=0, metapost=0
         )
-
-        # get posts
-        self.posts = list(self.get_posts())
 
         # nlp models
         corpus = [self.strategy["get_post_text"](p) for p in self.posts]
@@ -87,16 +84,18 @@ class DayNlp(Day, ConfigMixin):
 
         :param Post post: post doc to save similarity for
         :param bool overlap: include results from higher thresholds into lower ones?
+        :returns: saved (post, count).
+        :rtype: (Post, int)
         """
 
         # uses tfidf model to vectorise title+text of entire article corpus
         # `.similarity` holds params for the model's `similar_to` api.
-        similar, saved = {}, 0
-        log_msg = lambda: \
-            f"saving `{list(self.similarity)}` similarity " \
-            f"for doc #{post[self.db_id_field]} ..."
+        similar, saved = {}, 0 # 6290f008684d82f5922dfac7
+        log_msg = lambda saved: \
+            f"{'' if saved else 'NOT'} saving `{list(self.similarity)}` similarity " \
+            f"({saved}) siblings, for doc #{post[self.db_id_field]} ..."
 
-        self.log_started(log_msg)
+        self.log_started(log_msg, saved)
         for field, tfidf_params in self.similarity.items():
 
             # compute similar_docs and transform as db format, like so:
@@ -113,18 +112,24 @@ class DayNlp(Day, ConfigMixin):
             similar[field] = db_value
 
         try:
-            post, saved = self.save(Post({**post, **similar}))
-            self.log_ok(log_msg)
+            if similar:
+                post, saved = self.save(Post({**post, **similar}))
+            self.log_ok(log_msg, saved=saved)
 
         except Exception as exc:
-            self.log_failed(log_msg, exc)
+            self.log_failed(log_msg, exc, saved)
 
         self.counts["similarity"] = saved
         return post, saved
 
     def save_summary(self, post: Post):
-        """ Generate (destructive) abstractive summaries (title, text, categories)
-         for given post, using computed values, and persist it to the database. """
+        """
+        Generate (destructive) abstractive summaries (title, text, categories)
+        for given post, using computed values, and persist it to the database.
+
+        :returns: saved (post, count).
+        :rtype: (Post, int)
+         """
 
         saved: int = 0
         text = self.strategy["get_post_text"](post)
@@ -171,7 +176,7 @@ class DayNlp(Day, ConfigMixin):
             except Exception as exc:
                 self.log_failed(log_msg, exc, saved)
 
-            self.counts[META_POST] = saved
+        self.counts[META_POST] = saved
         return metapost, saved
 
     def mk_metapost(self, src: Post):
@@ -186,6 +191,9 @@ class DayNlp(Day, ConfigMixin):
         FIXME: summarizer currently only supports 1024 words max.
             find more powerful model? push model capacity?
             trim each text according to num_texts/1024 ratio.
+
+        :returns: saved (metapost, count).
+        :rtype: (Post, int)
         """
 
         # TODO: strategy to get metapost from other methods than TF-IDF,
@@ -198,7 +206,7 @@ class DayNlp(Day, ConfigMixin):
 
         # exists _text, means there were non-empty siblings
         if _text:
-            metapost = mk_defaultpost()
+            metapost = mk_post()
 
             # make a unique, yet predictable db_id from by summing sibling ids.
             # this guarantees db UPSERT-ion instead of invariably creating a new
@@ -222,11 +230,12 @@ class DayNlp(Day, ConfigMixin):
             # immutable fields
             # `TOP_IMAGE` from most similar post (highest score)
             # `MODIFIED_TIME` is now
+            metapost[TYPE] = "%s.%s" % (META_POST, src[TYPE])
             metapost[COUNTRY] = src[COUNTRY]
             metapost[PUBLISH_TIME] = str(mk_datetime(self))
             metapost[MODIFIED_TIME] = str(mk_datetime())
             metapost[TOP_IMAGE] = siblings[0][TOP_IMAGE]
-            metapost[PAPER] = ARISENEWS
+            metapost[PAPER] = THIS_PAPER
             metapost[AUTHORS] = [BOT]
 
             # compile misc. data from siblings into metapost:
@@ -256,17 +265,20 @@ class DayNlp(Day, ConfigMixin):
         if from_field:
             similar = self.expand_related(post, from_field)
             similar = list(map(lambda args: (args[0], args[1].get(SCORE)), similar))
+
         else:
             post_i: int = self.posts.index(post)
             similar = self.vectorizer.similar_to(post_i, **kwargs)
             similar = [(self.posts[j], score) for j, score in similar]
 
-        log_msg = \
+        log_msg = lambda post_score: \
             f"found ({len(similar)}) docs similar to " \
-            f"#{post[self.db_id_field]} (@{kwargs.get('threshold')}) : " \
+            f"#{post[self.db_id_field]} (@{post_score}) : " \
             f"{', '.join(['#{} (@{:.2f})'.format(p[self.db_id_field], score) for p, score in list(similar)])}"
 
-        self.log_ok(log_msg)
+        # threshold can't be recovered from db-saved post!
+        score = UNKNOWN if from_field else kwargs.get('threshold')
+        self.log_ok(log_msg, score)
 
         return similar
 
@@ -293,8 +305,8 @@ class DayNlp(Day, ConfigMixin):
                 if item_id:                         # get the next post that matches
                     post = next(filter(              # id of the related item
                         lambda p: p[self.db_id_field] == item_id, self.posts), None)
-                    related += [(post, db_post)]    # return existing value for field as well
+                    if post:
+                        related += [(post, db_post)]    # return existing value for field as well
 
-        related = list(filter(None, related))
         return related
 

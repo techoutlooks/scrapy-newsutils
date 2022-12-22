@@ -1,3 +1,4 @@
+daily-query@ git+https://github.com/techoutlooks/daily-query.git#egg=daily_query
 Scrapy
 newspaper3k
 nltk

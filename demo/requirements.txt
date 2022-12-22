@@ -51,7 +51,7 @@ idna==3.3
     #   requests
     #   tldextract
 image-quality==1.2.7
-    # via scrapy-news-utils (setup.py)
+    # via scrapy-newsutils (setup.py)
 imageio==2.16.1
     # via scikit-image
 incremental==21.3.0
@@ -78,11 +78,11 @@ lxml==4.8.0
 networkx==2.7.1
     # via scikit-image
 newspaper3k==0.2.8
-    # via scrapy-news-utils (setup.py)
+    # via scrapy-newsutils (setup.py)
 nltk==3.7
     # via
     #   newspaper3k
-    #   scrapy-news-utils (setup.py)
+    #   scrapy-newsutils (setup.py)
 numpy==1.22.3
     # via
     #   image-quality
@@ -92,7 +92,7 @@ numpy==1.22.3
     #   scipy
     #   tifffile
 ordered-set==4.1.0
-    # via scrapy-news-utils (setup.py)
+    # via scrapy-newsutils (setup.py)
 packaging==21.3
     # via scikit-image
 parsel==1.6.0
@@ -105,7 +105,7 @@ pillow==9.0.1
     #   imageio
     #   newspaper3k
     #   scikit-image
-    #   scrapy-news-utils (setup.py)
+    #   scrapy-newsutils (setup.py)
 protego==0.2.1
     # via scrapy
 pyasn1==0.4.8
@@ -115,7 +115,7 @@ pyasn1==0.4.8
 pyasn1-modules==0.2.8
     # via service-identity
 pycountry==22.3.5
-    # via scrapy-news-utils (setup.py)
+    # via scrapy-newsutils (setup.py)
 pycparser==2.21
     # via cffi
 pydispatcher==2.0.5
@@ -123,7 +123,7 @@ pydispatcher==2.0.5
 pygments==2.11.2
     # via rich
 pymongo==4.0.2
-    # via scrapy-news-utils (setup.py)
+    # via scrapy-newsutils (setup.py)
 pyopenssl==22.0.0
     # via scrapy
 pyparsing==3.0.7
@@ -147,9 +147,9 @@ requests==2.27.1
 requests-file==1.5.1
     # via tldextract
 rich==12.0.1
-    # via scrapy-news-utils (setup.py)
+    # via scrapy-newsutils (setup.py)
 schedule==1.1.0
-    # via scrapy-news-utils (setup.py)
+    # via scrapy-newsutils (setup.py)
 scikit-image==0.19.2
     # via image-quality
 scipy==1.8.0
@@ -157,7 +157,7 @@ scipy==1.8.0
     #   image-quality
     #   scikit-image
 scrapy==2.6.1
-    # via scrapy-news-utils (setup.py)
+    # via scrapy-newsutils (setup.py)
 service-identity==21.1.0
     # via scrapy
 sgmllib3k==1.0.0
