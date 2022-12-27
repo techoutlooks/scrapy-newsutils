@@ -3,19 +3,25 @@ import abc
 import nltk
 import pycountry
 
-from newspaper import Article, build
+from newsutils import LoggingMixin, FAILED, OK, PADDING
+from newsutils.scrapy.logo import parse_logo
+from daily_query.helpers import parse_dates
+
 from scrapy.spiders import Rule, CrawlSpider
 from scrapy.linkextractors import LinkExtractor
 
-from .items import Post, Author, Paper, mk_post
-from newsutils.bots.base.logging import LoggingMixin, \
-    FAILED, OK, PADDING
-from newsutils.bots.default_settings import TYPE
-from newsutils.bots.logo import parse_logo
-from daily_query.helpers import parse_dates
+from newspaper import Article, build
 
+from .items import Post, Author, Paper, mk_post
+from .settings import TYPE
 
 nltk.download('punkt')
+
+
+__all__ = [
+    "PostCrawlerMeta", "PostCrawlerMixin", "BasePostCrawler",
+    "DEFAULT_POST", "FEATURED_POST"
+]
 
 
 # default post types
@@ -36,6 +42,11 @@ class PostCrawlerMeta(abc.ABCMeta):
         # hooking `.from_crawler()`, so that base's Spider._set_crawler() gets a
         # chance to initialise `.settings` and connect the `spider_closed` signal
         # https://stackoverflow.com/a/27514672, https://stackoverflow.com/a/25352434
+
+        # DELETEME
+        # from newsutils import get_project_settings
+        # crawler.settings = get_project_settings()
+
         crawler.rules = [
             Rule(LinkExtractor(restrict_xpaths=[xpath]),
                  callback='parse_post',

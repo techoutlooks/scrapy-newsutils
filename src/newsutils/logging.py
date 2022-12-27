@@ -6,10 +6,16 @@ from typing import List, Callable
 
 from rich.console import OverflowMethod
 from rich.logging import RichHandler
-from newsutils.bots.console import make_logger
+from newsutils.console import make_logger
 
-from ..console import console
+from newsutils.console import console
 
+
+__all__ = [
+    "LoggingMixin", "TaskLoggerMixin", "NamespaceFormatter", "log_running",
+    "OK", "FAILED", "STARTED", "DONE", "TASK_ENDED", "TASK_RUNNING",
+    "PADDING", "PADDING_INTERNAL", "SEP_LINE"
+]
 
 # message statuses
 # https://carpedm20.github.io/emoji/

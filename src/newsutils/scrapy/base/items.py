@@ -3,13 +3,21 @@ import collections
 import scrapy
 from scrapy.item import ItemMeta
 
-from newsutils.bots import settings
+from .settings import get_scrapy_settings, META_POST, TYPE
+
+
+__all__ = [
+    "ItemValue", "Item", "Author", "Paper", "Post", "PostMeta",
+    "mk_post", "defaultpost",
+    "BOT", "THIS_PAPER",
+]
+
+
+settings = get_scrapy_settings()
 
 
 # basic field type detection heuristic from field names that
 # follow naming conventions: is_* -> bool, *s -> plural, etc.
-from newsutils.bots.default_settings import META_POST, TYPE
-
 is_plural = lambda w: w.endswith('s') and not w.endswith('ss')
 is_bool = lambda w: w.startswith('is_')
 
@@ -82,7 +90,7 @@ class Author(Item):
 
 botauthor = ItemValue(ItemValue.NO_DEFAULT, {
     "name": "Rob. O.",
-    "profile_image": settings['POSTS']['BRAND']['BOT_IMAGE_URL'],
+    "profile_image": settings['BRANDING']['BOT_IMAGE_URL'],
     "role": "NLP",
 })
 
@@ -104,7 +112,7 @@ class Paper(Item):
 thispaper = ItemValue(ItemValue.NO_DEFAULT, {
     "brand": "ARISEnews",
     "description": "Arise, Shine !",
-    "logo_url": settings['POSTS']['BRAND']['LOGO_URL']
+    "logo_url": settings['BRANDING']['LOGO_URL']
 })
 
 # AriseNews paper

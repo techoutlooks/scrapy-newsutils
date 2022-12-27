@@ -6,7 +6,8 @@ from bson import ObjectId
 
 from daily_query.mongo import Collection
 from itemadapter import ItemAdapter
-from newsutils.bots.base import BaseConfig
+from newsutils import BaseConfigMixin
+
 
 UNKNOWN = "N/A"         # unknown values
 
@@ -688,7 +689,7 @@ def fetch(endpoint: str, **kwargs):
     return response.json()
 
 
-class BaseSports(Collection, BaseConfig):
+class BaseSports(Collection, BaseConfigMixin):
     """
     Base building block for saving various sport news information
     types fetched from https://thesportsdb.com to the database.
@@ -752,9 +753,11 @@ class FetchSchedulesMixin:
             leagues_ids = SPORTS_LEAGUES_MAP.get(str(sport_id))
             for league_id in leagues_ids:
                 r = fetch(LEAGUE_SEASON_EVENTS, id=str(league_id), s=season)
-                for data in r.get('events', []):
-                    event = SportEvent(data)
-                    yield event
+                events = r.get('events')
+                if events:
+                    for data in events:
+                        event = SportEvent(data)
+                        yield event
 
     def save(self, event: SportEvent):
         """

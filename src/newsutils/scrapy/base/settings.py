@@ -1,5 +1,9 @@
-from .funcs import get_env_variable
-from newsutils.bots.appsettings import AppSettings
+from collections import OrderedDict
+from itemadapter import ItemAdapter
+
+from daily_query.mongo import Collection
+from newsutils.helpers import get_env_variable
+from newsutils.appsettings import AppSettings
 
 
 # immutable Post field names
@@ -55,22 +59,28 @@ _ITEM_ID_FIELD = SHORT_LINK
 
 
 class Posts(AppSettings):
+    """
+    Default settings for the posts scraper
+    """
 
     LOGGING = False
 
-    LOG_FORMATTER = 'bots.logformatter.LogFormatter'
+    LOG_FORMATTER = 'scrapy.logformatter.LogFormatter'
 
     ITEM_PIPELINES = {
-        'bots.pipelines.FilterDate': 100,
-        'bots.pipelines.CheckEdits': 110,
-        'bots.pipelines.DropLowQualityImages': 120,
-        'bots.pipelines.SaveToDb': 300
+        'newsutils.scrapy.pipelines.FilterDate': 100,
+        'newsutils.scrapy.pipelines.CheckEdits': 110,
+        'newsutils.scrapy.pipelines.DropLowQualityImages': 120,
+        'newsutils.scrapy.pipelines.SaveToDb': 300
     }
 
     # TODO: replace MongoDB with CouchDB
     # MongoDB only is supported. This is temporary.
     # BasePipeline's `get_setting` raises an exception if settings are not defined.
     CRAWL_DB_URI = 'mongodb://localhost:27017/scraped_news_db'
+
+    # DB_ID_FIELD: row id from the database engine
+    DB_ID_FIELD = _DB_ID_FIELD
 
     BRANDING = {
         "BOT_IMAGE_URL": None,
@@ -85,11 +95,8 @@ class Posts(AppSettings):
         # =============================================================================================
         # per-post editable/computed fields values.
 
-        # DB_ID_FIELD: row id from the database engine
         "AUTO_PUBLISH": True,
-        "DB_ID_FIELD": _DB_ID_FIELD,
         "ITEM_ID_FIELD": _ITEM_ID_FIELD,
-
         **_NLP_BASE_FIELDS_CONF,
 
 
@@ -140,5 +147,54 @@ class Posts(AppSettings):
     }
 
 
+def patch_scrapy_settings():
+    """
+    Merges app settings with scrapy settings,
+    Patches stdlib imports for both the scrapy project settings `crawler.settings`, and
+    the default settings `scrapy.settings.default_settings`,
+
+    :return merged settings dict.
+    """
+
+    # inject app-defined settings (`Posts`) inside the Scrapy settings,
+    # (both project and default) existing settings taking precedence.
+    settings = Posts()('settings', 'scrapy.settings.default_settings')
+
+    # == [ COMPUTED SETTINGS] ==
+    # load `computed` settings dynamically from env_vars, settings.py
+    # `editable` settings are typically computed based on other configurable settings
+    posts_config = settings.config
 
 
+    posts_config["NLP_BASE_FIELDS"] = \
+        [posts_config[f] for f in list(_NLP_BASE_FIELDS_CONF)]
+
+
+    posts_config["NLP_FIELDS"] = \
+         posts_config["NLP_BASE_FIELDS"] + \
+         [TAGS, KEYWORDS, EXCERPT]
+
+    posts_config["COMPUTED_FIELDS"] = \
+        [settings["DB_ID_FIELD"]] + \
+        posts_config["NLP_BASE_FIELDS"] + [posts_config[f] for f in (
+            'ITEM_ID_FIELD',
+        )]
+
+    posts_config["EDITS_EXCLUDED_FIELDS"] = [
+        VERSION,
+        settings["DB_ID_FIELD"],
+        posts_config["ITEM_ID_FIELD"],
+        *posts_config["NLP_FIELDS"],
+    ]
+
+    return settings.settings
+
+
+_settings = None
+def get_scrapy_settings():
+    """ Cached. """
+
+    global _settings
+    if not _settings:
+        _settings = patch_scrapy_settings()
+    return _settings

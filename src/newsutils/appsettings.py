@@ -3,7 +3,7 @@ import copy
 from importlib import import_module
 from typing import List
 
-from newsutils.bots.funcs import camel_to_snake, get_env_variable
+from .helpers import camel_to_snake, get_env_variable
 
 
 def configure(default_settings: dict, project_settings, project_default_settings,
@@ -118,6 +118,8 @@ class AppSettings(metaclass=abc.ABCMeta):
         {'SETTING_ONE': 'Setting One', 'SETTING_TWO': 'Setting Two'}
 
 
+        # FIXME: class properties not patched, eg. self.POSTS, etc.
+        # FIXME: force
         # TODO: load/parse config from `.cfg` file.
             cf. configparser
                 https://gitlab1.cs.cityu.edu.hk/gsalter2/dockers/-/blob/37836f254c8fcc10f70b991eb0c6f5c31378bcb4/manim/manim/_config/utils.py
@@ -186,6 +188,10 @@ class AppSettings(metaclass=abc.ABCMeta):
         """
         if self._defaults:
             return self._defaults
+        return self.asdict()
+
+    def asdict(self):
+        """ Return this settings object as a dict. """
         return dict((key, value) for (key, value) in type(self).__dict__.items()
                     if not key.startswith('__') and not key.islower())
 
@@ -208,7 +214,7 @@ class AppSettings(metaclass=abc.ABCMeta):
             _default = copy.deepcopy(self.defaults[key])
             _override = get_env_variable(key, getattr(self._project_settings, key, _default))
             if key == self.config_key:
-                self._validate_config(self.defaults[key])
+                self._validate_config(_override)
                 _default.update(_override)
                 self._settings[key] = _default
             else:

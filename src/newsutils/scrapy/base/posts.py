@@ -1,39 +1,30 @@
-from collections import OrderedDict
-from typing import Generator, Iterable
+from typing import Iterable
 
 from bson import ObjectId
+from itemadapter import ItemAdapter
+
 from daily_query.helpers import mk_date
 from daily_query.mongo import Collection
-from itemadapter import ItemAdapter
-from scrapy.utils.project import get_project_settings
 
+from newsutils.helpers import compose, add_fullstop
+from newsutils import BaseConfigMixin
+from .settings import TITLE, EXCERPT, TEXT, SHORT_LINK, TYPE, UNKNOWN
 from .items import Post
-from .logging import TaskLoggerMixin
-from ..default_settings import SHORT_LINK, TYPE, UNKNOWN, TITLE, EXCERPT, TEXT
-from ..funcs import compose, add_fullstop
 
 
-class BaseConfig(TaskLoggerMixin):
+__all__ = ['Day', 'PostConfigMixin']
+
+
+class PostConfigMixin(BaseConfigMixin):
+    """ Mixin. Exposes utility class attribues. """
+
     # FIXME: fields polluting the namespace,
     #    use DataClassCard in AppSettings? or set attrs here from snake_cased settings?
+    settings = BaseConfigMixin.settings
 
-    # the project's settings module will get automagically patched
-    # by the `postutils`library, on import, with useful defaults.
-    # `default_settings = settings` required to prevent override of `.settings`
-    # by the `cmdline.py` module when calling `.process_options()`
-    settings = get_project_settings()
-    default_settings = settings
-
-    # DATABASE FIELDS
+    # ITEM
     # `item_id_field`: Identifies crawled items uniquely. NOT the database id.
     item_id_field = settings['POSTS']['ITEM_ID_FIELD']
-    db_id_field = settings['POSTS']['DB_ID_FIELD']
-    db_uri = settings["CRAWL_DB_URI"]
-
-
-class PostConfig(BaseConfig):
-
-    settings = BaseConfig.settings
 
     # NLP FIELDS
     caption_field = settings['POSTS']['CAPTION_FIELD']
@@ -117,7 +108,7 @@ class PostConfig(BaseConfig):
         }
 
 
-class Day(Collection, PostConfig):
+class Day(Collection, PostConfigMixin):
     """
     Database management facility for daily post items.
     Requires `PostConfig`.
@@ -147,7 +138,7 @@ class Day(Collection, PostConfig):
     def __getitem__(self, lookup):
         """
         Look up for post in loaded posts
-        
+
         Usage: all below example return the found `Post` instance:
         >>> day[db_id]; day[post_index]; day[post]
 
@@ -199,7 +190,7 @@ class Day(Collection, PostConfig):
 
         self.log_started(log_msg, '...')
         try:
-            
+
             # save
             adapter = ItemAdapter(post)
             _id = ObjectId(adapter.item.get(self.db_id_field, None))
@@ -214,7 +205,7 @@ class Day(Collection, PostConfig):
             if saved:
                 if self.strategy["filter_metapost"](_post):
                     self[_id] = _post
-            
+
             # log
             op = 'inserted' if r.upserted_id else 'updated'
             self.log_ok(log_msg, f"{op} ({r.modified_count}/{r.matched_count})")

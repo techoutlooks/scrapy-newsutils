@@ -9,8 +9,8 @@ from imquality import brisque
 from itemadapter import ItemAdapter
 from scrapy.exceptions import DropItem
 
-from newsutils.bots.base.pipelines import BasePostPipeline
-from newsutils.bots.default_settings import \
+from newsutils.scrapy.base.pipelines import BasePostPipeline
+from newsutils.scrapy.base import \
     VERSION, SHORT_LINK, PUBLISH_TIME, IMAGES
 
 

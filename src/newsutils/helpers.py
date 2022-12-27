@@ -11,7 +11,7 @@ DATE_FORMAT = '%Y-%m-%d'
 DATETIME_FORMAT = f'{DATE_FORMAT} %H:%M:%S'
 
 
-# == [DATA] ==
+# == [UTILS] ==
 
 
 hexoint = lambda hex: f"0x{str(hex)}"

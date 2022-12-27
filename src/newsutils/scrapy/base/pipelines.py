@@ -1,21 +1,22 @@
 import abc
 
-from daily_query.mongo import PyMongo
 from scrapy.exceptions import DropItem
 
-from .items import Post
+from daily_query.mongo import PyMongo
 from daily_query.helpers import mk_datetime
 
-from . import PostConfig, Day
-from ..base.logging import PADDING
+from ...logging import PADDING
+from .items import Post
+from .posts import Day, PostConfigMixin
 
 
 __all__ = [
-    "PipelineMixin", "BaseMongoPipeline", "BasePostPipeline"
+    "PipelineMixin", "BasePostPipeline",
+    "BaseMongoPipeline",
 ]
 
 
-class PipelineMixin(PostConfig):
+class PipelineMixin(PostConfigMixin):
     """
     Foundational block for building pipelines
     """
