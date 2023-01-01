@@ -3,8 +3,8 @@ import abc
 import nltk
 import pycountry
 
-from newsutils import LoggingMixin, FAILED, OK, PADDING
-from newsutils.scrapy.logo import parse_logo
+from newsutils.logging import LoggingMixin, FAILED, OK, PADDING
+from newsutils.logo import parse_logo
 from daily_query.helpers import parse_dates
 
 from scrapy.spiders import Rule, CrawlSpider
@@ -13,7 +13,8 @@ from scrapy.linkextractors import LinkExtractor
 from newspaper import Article, build
 
 from .items import Post, Author, Paper, mk_post
-from .settings import TYPE
+from ..fields import TYPE
+
 
 nltk.download('punkt')
 

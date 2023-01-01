@@ -5,7 +5,6 @@ from scrapy.exceptions import DropItem
 from daily_query.mongo import PyMongo
 from daily_query.helpers import mk_datetime
 
-from ...logging import PADDING
 from .items import Post
 from .posts import Day, PostConfigMixin
 

@@ -9,9 +9,8 @@ from imquality import brisque
 from itemadapter import ItemAdapter
 from scrapy.exceptions import DropItem
 
-from newsutils.scrapy.base.pipelines import BasePostPipeline
-from newsutils.scrapy.base import \
-    VERSION, SHORT_LINK, PUBLISH_TIME, IMAGES
+from newsutils.base import BasePostPipeline
+from .fields import VERSION, SHORT_LINK, PUBLISH_TIME, IMAGES
 
 
 class SaveToDb(BasePostPipeline):

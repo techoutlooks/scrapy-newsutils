@@ -1,3 +1,4 @@
+from collections import OrderedDict
 from typing import Iterable
 
 from bson import ObjectId
@@ -6,9 +7,9 @@ from itemadapter import ItemAdapter
 from daily_query.helpers import mk_date
 from daily_query.mongo import Collection
 
-from newsutils.helpers import compose, add_fullstop
-from newsutils import BaseConfigMixin
-from .settings import TITLE, EXCERPT, TEXT, SHORT_LINK, TYPE, UNKNOWN
+from ..helpers import compose, add_fullstop
+from ..conf.mixins import BaseConfigMixin
+from ..fields import TITLE, EXCERPT, TEXT, SHORT_LINK, TYPE, UNKNOWN
 from .items import Post
 
 

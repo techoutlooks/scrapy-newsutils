@@ -6,14 +6,14 @@ from bson import ObjectId
 
 from daily_query.mongo import Collection
 from itemadapter import ItemAdapter
-from newsutils import BaseConfigMixin
+from newsutils.conf.mixins import BaseConfigMixin
 
 
 UNKNOWN = "N/A"         # unknown values
 
 
 __all__ = [
-    "SportEvent", "BaseSports", "FetchSchedulesMixin",
+    "SportEvent", "BaseSports", "FetchSchedulesMixin", "Sports"
     "SPORTS", "SPORTS_LEAGUES_MAP"
 ]
 
@@ -796,11 +796,12 @@ class FetchSchedulesMixin:
             self.save(event)
 
 
+class Sports(BaseSports, FetchSchedulesMixin):
+    pass
+
+
 # testing
 if __name__ == '__main__':
-
-    class Sports(BaseSports, FetchSchedulesMixin):
-        pass
 
     sports = Sports()
     sports.save_all()

@@ -3,10 +3,10 @@ from bson import ObjectId
 from daily_query.helpers import mk_datetime
 from newsnlp import TextSummarizer, TitleSummarizer, Categorizer, TfidfVectorizer
 
-from newsutils.scrapy.base.posts import PostConfigMixin, Day
+from newsutils.base import PostConfigMixin, Day
 from newsutils.helpers import wordcount, uniquedicts, dictdiff, add_fullstop
-from .base.items import Post, mk_post, BOT, THIS_PAPER
-from .base.settings import \
+from newsutils.base.items import Post, mk_post, BOT, THIS_PAPER
+from newsutils.conf import \
     TITLE, META_POST, SCORE, COUNTRY, TYPE, AUTHORS, PUBLISH_TIME, \
     MODIFIED_TIME, IMAGES, VIDEOS, TAGS, IS_DRAFT, IS_SCRAP, KEYWORDS, TOP_IMAGE, PAPER, UNKNOWN
 

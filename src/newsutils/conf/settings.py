@@ -4,30 +4,7 @@ from itemadapter import ItemAdapter
 from daily_query.mongo import Collection
 from newsutils.helpers import get_env_variable
 from newsutils.appsettings import AppSettings
-
-
-# immutable Post field names
-# these fields are NOT configurable
-TEXT = "text"
-EXCERPT = "excerpt"
-TITLE = "title"
-TAGS = "tags"
-KEYWORDS = "keywords"
-SHORT_LINK = "short_link"
-TYPE = "type"
-PUBLISH_TIME = "publish_time"
-MODIFIED_TIME = "modified_time"
-TOP_IMAGE = "top_image"
-IMAGES = "images"
-VIDEOS = "videos"
-COUNTRY = "country"
-AUTHORS = "authors"
-IS_DRAFT = "is_draft"
-IS_SCRAP = "is_scrap"
-VERSION = "version"
-PAPER = "paper"
-
-SCORE = "score"
+from ..fields import *
 
 
 # defaults for computed field names as
@@ -43,11 +20,6 @@ _NLP_BASE_FIELDS_CONF = {
     "SIBLINGS_FIELD": "siblings",
     "RELATED_FIELD": "related",
 }
-
-
-#
-META_POST = 'metapost'      # meta post type
-UNKNOWN = "N/A"         # unknown values
 
 
 # defaults for configurable fields
@@ -68,10 +40,10 @@ class Posts(AppSettings):
     LOG_FORMATTER = 'scrapy.logformatter.LogFormatter'
 
     ITEM_PIPELINES = {
-        'newsutils.scrapy.pipelines.FilterDate': 100,
-        'newsutils.scrapy.pipelines.CheckEdits': 110,
-        'newsutils.scrapy.pipelines.DropLowQualityImages': 120,
-        'newsutils.scrapy.pipelines.SaveToDb': 300
+        'newsutils.pipelines.FilterDate': 100,
+        'newsutils.pipelines.CheckEdits': 110,
+        'newsutils.pipelines.DropLowQualityImages': 120,
+        'newsutils.pipelines.SaveToDb': 300
     }
 
     # TODO: replace MongoDB with CouchDB
@@ -191,10 +163,3 @@ def patch_scrapy_settings():
 
 
 _settings = None
-def get_scrapy_settings():
-    """ Cached. """
-
-    global _settings
-    if not _settings:
-        _settings = patch_scrapy_settings()
-    return _settings

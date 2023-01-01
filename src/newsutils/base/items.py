@@ -3,7 +3,8 @@ import collections
 import scrapy
 from scrapy.item import ItemMeta
 
-from .settings import get_scrapy_settings, META_POST, TYPE
+from ..conf import get_project_settings
+from ..fields import META_POST, TYPE
 
 
 __all__ = [
@@ -13,7 +14,7 @@ __all__ = [
 ]
 
 
-settings = get_scrapy_settings()
+settings = get_project_settings()
 
 
 # basic field type detection heuristic from field names that
