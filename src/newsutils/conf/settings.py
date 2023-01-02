@@ -130,7 +130,7 @@ def patch_scrapy_settings():
 
     # inject app-defined settings (`Posts`) inside the Scrapy settings,
     # (both project and default) existing settings taking precedence.
-    settings = Posts()('settings', 'scrapy.settings.default_settings')
+    settings = Posts()('crawler.settings', 'scrapy.settings.default_settings')
 
     # == [ COMPUTED SETTINGS] ==
     # load `computed` settings dynamically from env_vars, settings.py
