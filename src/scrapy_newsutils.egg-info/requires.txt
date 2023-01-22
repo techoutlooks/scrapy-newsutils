@@ -1,0 +1,11 @@
+daily-query@ git+https://github.com/techoutlooks/daily-query.git#egg=daily_query
+Scrapy
+newspaper3k
+nltk
+pycountry
+pymongo
+Pillow
+image-quality
+schedule
+ordered-set
+rich

@@ -114,7 +114,7 @@ class Posts(AppSettings):
         #
         # SIMILARITY_MAX_DOCS: most similar docs count to return
         "SIMILARITY_SIBLINGS_THRESHOLD": .4,
-        "SIMILARITY_RELATED_THRESHOLD": 2,
+        "SIMILARITY_RELATED_THRESHOLD": .2,
         "SIMILARITY_MAX_DOCS": 2,
     }
 
