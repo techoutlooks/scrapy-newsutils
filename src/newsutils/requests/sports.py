@@ -7,19 +7,25 @@ from bson import ObjectId
 from daily_query.mongo import Collection
 from itemadapter import ItemAdapter
 from newsutils.conf.mixins import BaseConfigMixin
+from newsutils.helpers import get_env_variable
 
 
 UNKNOWN = "N/A"         # unknown values
+TIMEOUT = get_env_variable('TIMEOUT', 1)
 
 
 __all__ = [
-    "SportEvent", "BaseSports", "FetchSchedulesMixin", "Sports"
+    "SportEvent", "BaseSports", "FetchSchedulesMixin", "Sports",
     "SPORTS", "SPORTS_LEAGUES_MAP"
 ]
 
 # static settings for querying the free api at `thesportsdb.com`
 # inspired from `https://github.com/TralahM/thesportsdb`
-API_KEY = 2
+# Free users, can use the test API key "3" during development
+# $5/mo Patreon get a dedicated production API key with special features.
+# send no more than 1 API request per 2 seconds
+
+API_KEY = 3
 BASE_URL = "https://www.thesportsdb.com/api/v1/json/"
 LEAGUE_SEASON_EVENTS = "/eventsseason.php"
 SPORTS = {
@@ -685,8 +691,14 @@ class SportEvent(scrapy.Item):
 def fetch(endpoint: str, **kwargs):
     params = kwargs
     url = BASE_URL + str(API_KEY) + endpoint
-    response = requests.get(url, params=params)
-    return response.json()
+    try:
+        r = requests.get(url, timeout=TIMEOUT, params=params)
+        r.raise_for_status()
+    except requests.exceptions.RequestException as e:
+        print("fetch error:", e)
+        return dict(events=None)
+
+    return r.json()
 
 
 class BaseSports(Collection, BaseConfigMixin):
