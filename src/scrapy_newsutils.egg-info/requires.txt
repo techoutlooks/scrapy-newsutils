@@ -9,3 +9,6 @@ image-quality
 schedule
 ordered-set
 rich
+environs
+tweepy
+pyTelegramBotAPI

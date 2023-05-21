@@ -5,8 +5,9 @@ from scrapy.exceptions import DropItem
 from daily_query.mongo import PyMongo
 from daily_query.helpers import mk_datetime
 
-from .items import Post
-from .posts import Day, PostConfigMixin
+from .day import Day
+from newsutils.conf.post_item import Post
+from newsutils.conf.mixins import PostConfigMixin
 
 
 __all__ = [
@@ -151,6 +152,8 @@ class BasePostPipeline(PipelineMixin, abc.ABC):
 
     def get_day(self):
         """ Daily collection the current post will be saved under. """
+        # FIXME: cache Day instance?
+        #   return self.day or Day(str(self.post_time.date())) ?
         return Day(str(self.post_time.date()))
 
     @abc.abstractmethod

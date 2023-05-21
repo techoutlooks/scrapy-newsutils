@@ -1,3 +1,7 @@
+"""
+Utility classes for pulling sport news from the `thesportsdb.com`
+into the configured database.
+"""
 import datetime
 
 import requests
@@ -6,16 +10,17 @@ from bson import ObjectId
 
 from daily_query.mongo import Collection
 from itemadapter import ItemAdapter
+
+from newsutils.conf import UNKNOWN
 from newsutils.conf.mixins import BaseConfigMixin
-from newsutils.helpers import get_env_variable
+from newsutils.helpers import get_env
 
 
-UNKNOWN = "N/A"         # unknown values
-TIMEOUT = get_env_variable('TIMEOUT', 1)
+TIMEOUT = get_env('TIMEOUT', 1)
 
 
 __all__ = [
-    "SportEvent", "BaseSports", "FetchSchedulesMixin", "Sports",
+    "SportEvent", "BaseSports", "SchedulesMixin", "Sports",
     "SPORTS", "SPORTS_LEAGUES_MAP"
 ]
 
@@ -24,7 +29,6 @@ __all__ = [
 # Free users, can use the test API key "3" during development
 # $5/mo Patreon get a dedicated production API key with special features.
 # send no more than 1 API request per 2 seconds
-
 API_KEY = 3
 BASE_URL = "https://www.thesportsdb.com/api/v1/json/"
 LEAGUE_SEASON_EVENTS = "/eventsseason.php"
@@ -684,6 +688,8 @@ class SportEvent(scrapy.Item):
         self['_id'] = self.mkoid()
 
     def mkoid(self):
+        """ Generate a predictable (not random) oid
+        suitable for db upserts """
         oid = str.encode("".join([self[n] for n in EVENT_ID_FIELDS])[:12])
         return ObjectId(oid)
 
@@ -701,7 +707,7 @@ def fetch(endpoint: str, **kwargs):
     return r.json()
 
 
-class BaseSports(Collection, BaseConfigMixin):
+class BaseSports(BaseConfigMixin, Collection):
     """
     Base building block for saving various sport news information
     types fetched from https://thesportsdb.com to the database.
@@ -722,19 +728,18 @@ class BaseSports(Collection, BaseConfigMixin):
 
     def __init__(self, sports_ids=None, season=None):
 
-        # initializes temporarily with `_default` collection
+        # initialises a temporary collection named `_default`
         super().__init__(db_or_uri=self.db_uri)
+
         if sports_ids:
             self.sports_ids = sports_ids
         self.season = season
 
 
-class FetchSchedulesMixin:
+class SchedulesMixin:
     """
-    Mixin for fetching match schedules for given sports and season.
-    Yields schedule events by automatically calling `.fetch_sports()`
-    initialization. Events must be saved them to the db by manually
-    calling `.save_all()`.
+    Mixin for fetching match schedules for given sports and season,
+    and saving them to the database.
 
     Usage:
 
@@ -808,7 +813,7 @@ class FetchSchedulesMixin:
             self.save(event)
 
 
-class Sports(BaseSports, FetchSchedulesMixin):
+class Sports(BaseSports, SchedulesMixin):
     pass
 
 

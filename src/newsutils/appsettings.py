@@ -3,20 +3,36 @@ import copy
 from importlib import import_module
 from typing import List
 
-from .helpers import camel_to_snake, get_env_variable
+from .exceptions import ImproperlyConfigured
+from .helpers import camel_to_snake, get_env
+
+
+__all__ = (
+    "configure", "requires_configured",
+    "AppSettings",
+)
 
 
 def configure(default_settings: dict, project_settings, project_default_settings,
               config_key: str = None, required_settings=[]):
     """
-    Initializes a new app config from **default_settings**
+    Initializes a new app config with default settings from dict.
+    Returned settings are merged (env/project/defaults) and patched in supplied
+    framework's settings modules (project and framework's default).
 
-    :param default_settings: defaults settings, as class attributes with caps names
-    :param project_settings: project's settings module (eg. Django, Flask, Scrapy settings file)
-    :param project_default_settings: framework's default builtin settings
-    :param config_key: setting key that hosts the app's own settings (config) dict
-    :param required_settings: compulsory settings.
+    Following are AppSettings instance initialisers:
+        :param default_settings: defaults settings, as class attributes with caps names
+        :param config_key: setting key that hosts the app's own settings (config) dict
+        :param required_settings: compulsory settings.
+
+    Following are dotted names pointing to loaded settings modules to patch,
+    These are settings modules recognised by the project's underlying framework.
+        :param project_settings: project's settings module (eg. Django, Flask, Scrapy settings file)
+        :param project_default_settings: framework's default builtin settings
+
     """
+
+    # generate settings from create a anonymous AppSettings instance
     return type('', (AppSettings,), default_settings) \
         (config_key=config_key, required_settings=required_settings) \
         (project_settings, project_default_settings)
@@ -59,6 +75,9 @@ class AppSettings(metaclass=abc.ABCMeta):
     **required_settings**  Keys of config items which must be defined explicitly
     **strict**             If True, raises an error if no config was found,
 
+    - Nota: settings with value `None` are required, and must be explicitely defined,
+        else an exception is raised.
+
     Usage:
 
         from djutils.appconfig import AppSettings
@@ -87,7 +106,7 @@ class AppSettings(metaclass=abc.ABCMeta):
 
         # or
 
-        # my_app/settings.py
+        # my_app/posts.py
         configure({
             AUTH_USER = 'oneauth.User'
             MY_APP = {
@@ -126,14 +145,6 @@ class AppSettings(metaclass=abc.ABCMeta):
 
     """
 
-    # set by init
-    required_settings: List[str] = []
-    strict: bool
-
-    is_configured: bool = False  # was `.configure()` ever called?
-
-    _defaults = {}  # default settings from this app
-    _settings = {}  # live settings, source of truth
     _project_settings = None
     _project_default_settings = None
     _refresh = False  # `_refresh` triggers re-computing settings
@@ -145,10 +156,16 @@ class AppSettings(metaclass=abc.ABCMeta):
         :param required_settings:
         :param strict:
         """
+
+        # prop methods.
+        self._defaults = {}  # cache, default settings from this class
+        self._settings = {}  # cache, live settings, source of truth
         self._config_key = config_key
+        self.is_configured: bool = False  # was `.configure()` ever called?
+
         self.strict, self.required_settings = \
             strict, list(required_settings) \
-                if isinstance(required_settings, (dict, list)) else []
+                if isinstance(required_settings, (dict, list, tuple)) else []
 
     def __call__(self, project_settings, project_default_settings):
         self.configure(project_settings, project_default_settings)
@@ -161,11 +178,11 @@ class AppSettings(metaclass=abc.ABCMeta):
          settings defined within the app
 
         Raises `ImproperlyConfigured`, if the setting is required to be explicitly
-        defined, ie., in the project's `settings.py`.
+        defined, ie., in the project's `day.py`.
         """
         setting = self.config.get(key, self.settings.get(key, None))
         if key in self.required_settings and not setting:
-            raise ValueError(
+            raise ImproperlyConfigured(
                 f'Required `{self.config_key}["{key}"]` has no defaults, '
                 f'thus must be defined explicitly.')
         return setting
@@ -183,8 +200,8 @@ class AppSettings(metaclass=abc.ABCMeta):
     @property
     def defaults(self):
         """
-        Default settings, ie. the class members with capital names
-        in the app settings class definition
+        Default settings, ie. all class members with capital names
+        in this class definition
         """
         if self._defaults:
             return self._defaults
@@ -198,21 +215,25 @@ class AppSettings(metaclass=abc.ABCMeta):
     @property
     def settings(self):
         """
-        Live project settings. The source of truth. A merging of the project and
-        app settings: project settings if found, do override the app's defaults.
+        Live project settings. The source of truth.
+        Merges the env, the project and the app settings with following override priority:
+        env > project settings > app's defaults.
         """
 
-        # return cached settings if existed and refresh not requested
-        # TODO: on settings changed signal, clear cache cache and recompute
+        # return locally cached settings if existed and refresh not requested
+        # TODO: on settings changed signal, clear cache and recompute
         if self._settings and not self._refresh:
             return self._settings
 
         for key in self.defaults:
 
-            # deepcopy: we don't want to pass dict ref of defaults as a live setting.
-            # update app's default config if defined, otherwise override all settings.
-            _default = copy.deepcopy(self.defaults[key])
-            _override = get_env_variable(key, getattr(self._project_settings, key, _default))
+            # deepcopy: to ensure no mere ref of defaults dict is passed as a live setting.
+            # settings lookup policy: env, then user-configured project settings, then default settings.
+            # settings merging policy: app's default config => update, others => override.
+            # with `coerce=True`, requires env var to be of the same type as the setting's default value.
+            _default: dict = copy.deepcopy(self.defaults[key])
+            _override = get_env(key, getattr(self._project_settings, key, _default), coerce=True)
+
             if key == self.config_key:
                 self._validate_config(_override)
                 _default.update(_override)
@@ -220,9 +241,17 @@ class AppSettings(metaclass=abc.ABCMeta):
             else:
                 self._settings[key] = _override
 
+            # required settings have to be explicitly defined. thus, an
+            # exception is raised if required settings were found nowhere.
+            self.fail_required(key, self.settings[key])
+
         return self._settings
 
     def configure(self, project_settings, project_default_settings):
+        """
+        Configure the project, ie., loads candidate settings modules and
+        injects them with settings defined on this class.
+        """
         if not self.has_config and self.strict:
             raise KeyError(err_msgs['config_not_found'] % {
                 "cls_name": {type(self).__name__}, 'config_key': self.config_key})
@@ -241,7 +270,8 @@ class AppSettings(metaclass=abc.ABCMeta):
     def inject(self, **kwargs):
         """
         Inject the app defined settings into the project and framework settings modules.
-        Works by patching loaded settings modules from `sys.modules`
+        Works by patching loaded settings modules from `sys.modules`.
+        Low-level method: consumers should call rather call `.configure()`.
 
         https://passingcuriosity.com/2010/default-settings-for-django-applications/
         https://docs.djangoproject.com/en/3.1/topics/settings/
@@ -293,6 +323,22 @@ class AppSettings(metaclass=abc.ABCMeta):
 
         return True
 
+    def fail_required(self, key, value: dict):
+        """
+        Fail required settings
+        A setting with value `None` is a required setting.
+        """
+        required_keys = ()
+        if isinstance(value, dict):
+            required_keys = list(dict(filter(lambda s: s[1] is None, value.items())))
+        if value is None:
+            required_keys = [key]
+
+        if len(required_keys):
+            raise ImproperlyConfigured(err_msgs['config_required_settings'] % {
+                "keys": ", ".join(required_keys)
+            })
+
 
 err_msgs = {
     "not_configured":
@@ -309,6 +355,9 @@ err_msgs = {
 
     "config_not_dict":
         "Config value for %(config_key)s must be `dict`, got: %(config_value)s.\n"
-        "Hint: `%(config_key)s = %(config_value)s)`"
+        "Hint: `%(config_key)s = %(config_value)s)`",
+
+    "config_required_settings":
+        "The %(keys)s setting(s) must not be empty!"
 
 }

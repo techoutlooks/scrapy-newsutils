@@ -1,7 +1,7 @@
 .idea/
 venv/
 src/.pytest_cache/
-src/newsutils.egg-info/
+src/scrapy_newsutils.egg-info/*
 *.py[cod]
 __pycache__/*
 .DS_Store

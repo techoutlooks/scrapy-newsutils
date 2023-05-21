@@ -12,8 +12,9 @@ from scrapy.linkextractors import LinkExtractor
 
 from newspaper import Article, build
 
-from .items import Post, Author, Paper, mk_post
-from ..fields import TYPE
+from .items import Author, Paper
+from newsutils.conf.post_item import Post, mk_post
+from newsutils.conf import TYPE
 
 
 nltk.download('punkt')
@@ -32,7 +33,7 @@ FEATURED_POST = "featured"
 
 class PostCrawlerMeta(abc.ABCMeta):
     """
-    Custom post crawler
+    Custom post crawl
     https://realpython.com/python-metaclasses/
     https://www.geeksforgeeks.org/__new__-in-python/
     """
@@ -40,13 +41,13 @@ class PostCrawlerMeta(abc.ABCMeta):
     def __new__(cls, *args, **kwargs):
         crawler = super().__new__(cls, *args, **kwargs)
         # dynamic crawl_all rules:
-        # hooking `.from_crawler()`, so that base's Spider._set_crawler() gets a
+        # hooking `.from_crawler()`, so that crawl's Spider._set_crawler() gets a
         # chance to initialise `.settings` and connect the `spider_closed` signal
         # https://stackoverflow.com/a/27514672, https://stackoverflow.com/a/25352434
 
         # DELETEME
         # from newsutils import get_project_settings
-        # crawler.settings = get_project_settings()
+        # crawl.settings = get_project_settings()
 
         crawler.rules = [
             Rule(LinkExtractor(restrict_xpaths=[xpath]),
@@ -112,7 +113,7 @@ class PostCrawlerMixin(LoggingMixin):
         self.days_to = days.get('days_to', self.days_to)
 
         if not self.language:
-            self.language = self.settings["POSTS"]['DEFAULT_LANG']
+            self.language = self.settings["POSTS"]['default_lang']
 
         # compute filter dates for crawling
         self.filter_dates = parse_dates(
@@ -170,7 +171,7 @@ class PostCrawlerMixin(LoggingMixin):
             # setting initial values
             version=1,
             is_scrap=True,
-            is_draft=not self.settings["POSTS"]['AUTO_PUBLISH']
+            is_draft=not self.settings["POSTS"]['auto_publish']
         )
 
         self.log_info(f'{OK:<{PADDING}}' 

@@ -3,15 +3,40 @@ from bson import ObjectId
 from daily_query.helpers import mk_datetime
 from newsnlp import TextSummarizer, TitleSummarizer, Categorizer, TfidfVectorizer
 
-from newsutils.base import PostConfigMixin, Day
-from newsutils.helpers import wordcount, uniquedicts, dictdiff, add_fullstop
-from newsutils.base.items import Post, mk_post, BOT, THIS_PAPER
+from newsutils.conf import LINK
+from newsutils.conf.mixins import PostConfigMixin
+from newsutils.crawl import Day
+from newsutils.helpers import wordcount, uniquedicts, dictdiff, add_fullstop, import_attr
+from newsutils.crawl.items import BOT, THIS_PAPER
+from newsutils.conf.post_item import Post, mk_post
 from newsutils.conf import \
-    TITLE, META_POST, SCORE, COUNTRY, TYPE, AUTHORS, PUBLISH_TIME, \
-    MODIFIED_TIME, IMAGES, VIDEOS, TAGS, IS_DRAFT, IS_SCRAP, KEYWORDS, TOP_IMAGE, PAPER, UNKNOWN
+    TITLE, METAPOST, SCORE, COUNTRY, TYPE, AUTHORS, PUBLISH_TIME, \
+    MODIFIED_TIME, IMAGES, VIDEOS, TAGS, IS_DRAFT, IS_SCRAP, KEYWORDS, TOP_IMAGE, PAPER, UNKNOWN, \
+    get_setting
 
 
 CATEGORY_NOT_FOUND = 'N/A'
+
+
+# default metapost link creator function.
+# referenced by default `metapost_link_creator` project setting.
+create_metapost_link = lambda baseurl, db_id_field: "%s/%s" % (
+    baseurl.strip("/"), db_id_field)
+
+
+def set_create_metapost_link():
+    """
+    Initialises the metapost link creator function from setting `metapost_link_creator`.
+    Setting value must be the dotted path (string) referencing the create link function.
+
+    Loads default implementation (`create_metapost_link`) if no user-defined value set.
+    """
+    global create_metapost_link
+    value = get_setting('POSTS.metapost_link_creator')
+    create_metapost_link = import_attr(value)
+
+
+set_create_metapost_link()
 
 
 class DayNlp(Day, PostConfigMixin):
@@ -22,9 +47,6 @@ class DayNlp(Day, PostConfigMixin):
     """
 
     lang = "fr"
-    strategy = PostConfigMixin.strategy
-
-    posts: [Post] = None
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)  # sets `self.day` as collection
@@ -37,7 +59,7 @@ class DayNlp(Day, PostConfigMixin):
         )
 
         # nlp models
-        corpus = [self.strategy["get_post_text"](p) for p in self.posts]
+        corpus = [self.get_decision("get_post_text")(p) for p in self.posts]
         self.vectorizer = TfidfVectorizer(lang="fr")(corpus)
         self.categorizer = Categorizer(lang="fr")
         self.text_summarizer = TextSummarizer(lang=self.lang)
@@ -54,7 +76,7 @@ class DayNlp(Day, PostConfigMixin):
             params = {
                 "similarity": {},
                 "summary": {},
-                META_POST: {},
+                METAPOST: {'link_creator': create_metapost_link},
             }
 
             # no verb, runs them all !
@@ -120,7 +142,7 @@ class DayNlp(Day, PostConfigMixin):
         self.counts["similarity"] = saved
         return post, saved
 
-    def save_summary(self, post: Post):
+    def save_summary(self, post: Post, **kwargs):
         """
         Generate (destructive) abstractive summaries (title, text, categories)
         for given post, using computed values, and persist it to the database.
@@ -130,7 +152,7 @@ class DayNlp(Day, PostConfigMixin):
          """
 
         saved: int = 0
-        text = self.strategy["get_post_text"](post)
+        text = self.get_decision("get_post_text")(post)
         summary, caption, categories = self.get_summary(text)
         category = categories[0][0] if categories else CATEGORY_NOT_FOUND
 
@@ -155,18 +177,18 @@ class DayNlp(Day, PostConfigMixin):
         self.counts["summary"] = saved
         return post, saved
 
-    def save_metapost(self, src: Post):
+    def save_metapost(self, src: Post, **kwargs):
         """ Generate a meta post from given post's siblings,
          and save it to the database in the metapost's collection. """
 
         metapost, saved = None, 0
         log_msg = lambda status: \
-            f"generating `{META_POST}` " \
+            f"generating `{METAPOST}` " \
             f"{'#' + str(metapost[self.db_id_field]) if status else ''} " \
             f"for post #{src[self.db_id_field]}: "
 
         self.log_started(log_msg, saved)
-        metapost = self.mk_metapost(src)
+        metapost = self.mk_metapost(src, **kwargs)
         if metapost:
             try:
                 metapost, saved = self.save(metapost)
@@ -174,15 +196,17 @@ class DayNlp(Day, PostConfigMixin):
             except Exception as exc:
                 self.log_failed(log_msg, exc, saved)
 
-        self.counts[META_POST] = saved
+        self.counts[METAPOST] = saved
         return metapost, saved
 
-    def mk_metapost(self, src: Post):
+    def mk_metapost(self, src: Post, link_creator=None):
         """ Generate a meta post by compiling all siblings
         of the given post, given the configured strategy.
 
-        meta posts do NOT have following fields:
+        Nota: meta posts do NOT have following fields:
         TITLE, TEXT, EXCERPT, LINK, SHORT_LINK, LINK_HASH
+        They are meaningless given that metaposts are summarized from multiple posts,
+        and that the summarisation engine only generates the caption, title, and category fields.
 
         CAUTION: relies on `.save_summary()` to set values for fields `siblings`, `related`
 
@@ -199,18 +223,17 @@ class DayNlp(Day, PostConfigMixin):
         metapost = None
         siblings = self.get_similar(src, from_field=self.siblings_field)
         siblings, _ = zip(*siblings) if siblings else ([], [])
-        siblings_texts = [self.strategy["get_post_text"](p, meta=True) for p in siblings]
+        siblings_texts = [self.get_decision("get_post_text")(p, meta=True) for p in siblings]
         _text = " ".join([add_fullstop(t) for t in siblings_texts])
 
         # exists _text, means there were non-empty siblings
         if _text:
             metapost = mk_post()
 
-            # make a unique, yet predictable db_id from by summing sibling ids.
+            # make a unique, yet predictable db_id by summing siblings ids.
             # this guarantees db UPSERT-ion instead of invariably creating a new
             # metapost on every call. '0xc50e7a9799d7b9bb887365b8'
-            hex_sum = hex(sum([int(f"0x{str(p[self.db_id_field])}", 16)
-                               for p in siblings]))
+            hex_sum = hex(sum([int(f"0x{str(p[self.db_id_field])}", 16) for p in siblings]))
             metapost[self.db_id_field] = ObjectId(hex_sum[2:2 + 24])  # strip `0x`, keep 24 characters
 
             # nlp fields
@@ -228,7 +251,7 @@ class DayNlp(Day, PostConfigMixin):
             # immutable fields
             # `TOP_IMAGE` from most similar post (highest score)
             # `MODIFIED_TIME` is now
-            metapost[TYPE] = "%s.%s" % (META_POST, src[TYPE])
+            metapost[TYPE] = "%s.%s" % (METAPOST, src[TYPE])
             metapost[COUNTRY] = src[COUNTRY]
             metapost[PUBLISH_TIME] = str(mk_datetime(self))
             metapost[MODIFIED_TIME] = str(mk_datetime())
@@ -244,8 +267,13 @@ class DayNlp(Day, PostConfigMixin):
                     metapost[f] &= post[f]
                 for f in IMAGES, VIDEOS, KEYWORDS, TAGS:  # strs
                     metapost[f] = list(set(metapost[f]).union(post[f]))
-                for f in AUTHORS,:  # dicts
+                for f in AUTHORS, :  # dicts
                     metapost[f] = uniquedicts(metapost[f], post[f])
+
+            # generate metapost link from user-defined creator func if any
+            # default joins baseurl picked from the env and the metapost id
+            link = self.get_decision('get_metapost_link')(metapost, create_metapost_link)
+            metapost[LINK] = link
 
         return metapost
 
