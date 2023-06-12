@@ -45,7 +45,7 @@ class Paper(Item):
 
 
 thispaper = ItemValue(ItemValue.NO_DEFAULT, {
-    "brand": "ARISEnews",
+    "brand": "Leeram News",
     "description": "Arise, Shine !",
     "logo_url": settings['BRANDING']['logo_url']
 })

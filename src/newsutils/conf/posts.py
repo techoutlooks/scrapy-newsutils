@@ -129,12 +129,9 @@ class Posts(AppSettings):
         # nlp_uses_meta: also add metaposts (type==METAPOST) as inputs to NLP tasks?
         # summary_uses_nlp: (iff !metapost type), use text from `excerpt` field instead of `text` field?
         # meta_uses_nlp: metapost generation: use text from `caption` field instead of `title` field?
-        # metapost_baseurl: matapost link's url prefix, eg. "http://leeram.today/posts/"
         "nlp_uses_meta": False,
         "summary_uses_nlp": False,
         "meta_uses_nlp": True,
-        "metapost_baseurl": None,
-        "metapost_link_creator": 'newsutils.nlp.create_metapost_link',
 
         # PIPELINES
         # =============================================================================================

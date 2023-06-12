@@ -78,7 +78,7 @@ def get_setting(keypath):
     Assumes project_settings is a multilevel dict-like storage.
 
     :param str keypath: setting key, as a dotted path
-        eg. "POSTS.metapost_link_creator"
+        eg. "POSTS.similarity_siblings_threshold"
     """
     s = get_project_settings()
     root, *children = keypath.split(".")

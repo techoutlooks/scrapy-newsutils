@@ -128,13 +128,8 @@ class PostStrategyMixin(PostConfigMixin):
 
             return add_fullstop(post[title]) + " " + (post[text] or "")
 
-        def get_metapost_link(metapost, create_link_func):
-            baseurl = cls.settings['POSTS']['metapost_baseurl']
-            return create_link_func(baseurl, str(metapost[cls.db_id_field]))
-
         return {
             "filter_metapost": filter_metapost,
             "get_post_text": get_post_text,
-            "get_metapost_link": get_metapost_link
         }.get(rule)
 

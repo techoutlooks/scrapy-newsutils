@@ -2,6 +2,7 @@
 # vim: ai ts=4 sts=4 et sw=4
 import logging
 import string
+from functools import reduce
 from typing import List, Callable
 
 from rich.console import OverflowMethod
@@ -173,6 +174,9 @@ class LoggingMixin:
 #             return kwargs.get(key, '{{{0}}}'.format(key))
 
 class NamespaceFormatter(string.Formatter):
+    """
+    Provides defaults in case kw are not supplied by caller
+    """
 
     def __init__(self, namespace={}):
         string.Formatter.__init__(self)
@@ -209,7 +213,10 @@ class TaskLoggerMixin(LoggingMixin):
     def log_failed(self, log_msg, exc: Exception, *args, **kwargs):
         self.log_task(logging.INFO, FAILED, log_msg, *args, **kwargs)
         if exc:
-            self.log_task(logging.DEBUG, FAILED, str(exc))
+            # exclude '{' and '}' from the exception msg,
+            # it causes and exception being raised by backing Formatter class.
+            errmsg = reduce(lambda s, v: s.replace(v, ''), '{}', str(exc))
+            self.log_task(logging.DEBUG, FAILED, errmsg)
         # TODO: not sure if/wt to return here
 
     def log_ended(self, log_msg, *args, **kwargs):

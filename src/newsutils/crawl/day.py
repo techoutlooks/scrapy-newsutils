@@ -6,7 +6,7 @@ from itemadapter import ItemAdapter
 from daily_query.helpers import mk_date
 from daily_query.mongo import Collection
 
-from ..helpers import compose
+from ..helpers import compose, dotdict
 from ..conf.post_item import Post
 from ..conf.mixins import PostStrategyMixin
 from newsutils.conf import TaskTypes, \
@@ -19,18 +19,21 @@ __all__ = ['Day']
 class Day(PostStrategyMixin, Collection):
     """
     Database management facility for daily post items.
-    Requires `PostConfig`.
     """
 
     posts: [Post] = []
+    task_type = None
 
     def __init__(self, day, task_type=None, match={}):
         """
         :param day: the day
         :param TaskTypes task_type: type of the cmd task instantiating this class.
+            Helps define strategies eg. which post types to load. cf. PostStrategyMixin.
         :param dict match: posts match filter:
             passed on as-is to db engine's `.find(match=match)` method
         """
+
+        # sets `self.day` as collection
         super().__init__(day, db_or_uri=self.db_uri)
         self.task_type = task_type
         self.posts = list(self.get_posts(**match))
@@ -56,13 +59,12 @@ class Day(PostStrategyMixin, Collection):
 
     def __getitem__(self, lookup):
         """
-        Look up for post in loaded posts
+        Look up for post in loaded posts (`self.posts`)
 
         Usage: all below example return the found `Post` instance:
         >>> day[db_id]; day[post_index]; day[post]
 
-        :param int or ObjectId or Post lookup: index, database id or post for post
-            assumes key:str is str(ObjectId)
+        :param int|ObjectId|Post lookup: post to lookup, or its id or index relative to `self.posts`
         :returns: found Post instance
         :rtype: Post
         """
@@ -79,29 +81,38 @@ class Day(PostStrategyMixin, Collection):
                 pass
             return post
 
-    def __setitem__(self, lookup, value):
+    def __setitem__(self, loc, post):
         """
-        Update post identified by lookup inside **self.posts**.
+        Updates (destructive) post identified by `lookup` inside `self.posts`.
+
+        :param int|ObjectId|Post loc: location in `self.posts` to override
+        :param Post post: new post value to set
 
         Usage:
         >>> day[db_id] = new_post; day[post_index] = new_post; day[post] = new_post
-
-        :param int or ObjectId or Post lookup: index, database id or post for post
-            assumes key:str is str(ObjectId)
-        :param Post value: new post value to set
         """
-        # 1) find index to update from lookup
-        # 2) perform destructive update
-        i = self.posts.index(self[lookup])
-        self.posts[i] = value
+        existed = self[loc]
+        if existed:
+            self.posts[self.posts.index(existed)] = post
+        else:
+            self += post
 
-    def save(self, post: Post):
-        """ Updates, or creates a new post/metapost if `post` has no db id value.
+    def __add__(self, other):
+        self.posts += [other]
+
+    def save(self, post: Post, id_field_or_match=None, only=None):
+        """ Upsert post matched by given `id`, `match` or `only` fields.
         Uses `ItemAdapter` for proper fields checking vs. `Post` Item class.
-        :returns (Post, modified_count) or (None, 0) if db was not hit.
+
+        :param post: post to update or create
+        :param str|dict id_field_or_match:
+            custom `_id` field name to lookup by. Defaults to the configured setting, eg. `_id`,
+            or lookup dictionary
+        :param Iterable[str] only: only alter the db iff `only` fields on post vs db are identical.
+        :rtype: Post
         """
 
-        _post, saved = None, 0
+        db_post, created = None, False
         log_msg = lambda detail: \
             f"saving post (type `{post.get(TYPE) or UNKNOWN}`) #" \
             f"{post.get(self.db_id_field, post[SHORT_LINK])} to db: " \
@@ -109,27 +120,30 @@ class Day(PostStrategyMixin, Collection):
 
         self.log_started(log_msg, '...')
         try:
-
-            # save
             adapter = ItemAdapter(post)
-            _id = ObjectId(adapter.item.get(self.db_id_field, None))
-            adapter.update({self.db_id_field: _id})
-            r = self.update_one(
-                {'_id': {'$eq': _id}}, {"$set": adapter.asdict()}, upsert=True)
-            _post, saved = adapter.item, r.modified_count
+            match = {f: adapter.item.get(f) for f in (only or [])}
+            if isinstance(id_field_or_match, dict):
+                match.update(id_field_or_match)
+            else:
+                id_key = id_field_or_match or self.db_id_field
+                id_value = adapter.item.get(id_field_or_match) if id_field_or_match \
+                    else ObjectId(adapter.item.get(self.db_id_field, None))
+                match.update({id_key: id_value})
 
-            # also, refect update in mem cache according to strategy,
-            # iff the db update was successful. eg. don't update metaposts
+            db_post = self.update_or_create(adapter.asdict(), **match)
+
+            # also, reflect update in mem cache according to strategy,
+            # iff the db update was successful. eg., don't update metaposts
             # if they were never loaded in the first place (metaposts filtered)
-            if saved:
-                if self.get_decision("filter_metapost")(_post, self.task_type):
-                    self[_id] = _post
+            if db_post:
+                db_post = Post(db_post)
+                db_post_id = ObjectId(adapter.item[self.db_id_field])
+                if self.get_decision("filter_metapost")(db_post, self.task_type):
+                    self[db_post_id] = db_post
 
-            # log
-            op = 'inserted' if r.upserted_id else 'updated'
-            self.log_ok(log_msg, f"{op} ({r.modified_count}/{r.matched_count})")
+            self.log_ok(log_msg, "...")
 
         except Exception as exc:
             self.log_failed(log_msg, exc, '')
 
-        return _post, saved
+        return db_post

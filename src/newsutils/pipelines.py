@@ -31,7 +31,7 @@ class SaveToDb(BasePostPipeline):
         :return: Post: altered (database operation result), or passed on post.
         """
 
-        post, _ = self.day.save(self.post)
+        post = self.day.save(self.post)
         return post or self.post
 
 

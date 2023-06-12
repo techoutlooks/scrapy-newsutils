@@ -1,4 +1,5 @@
 import re
+import unicodedata
 from functools import reduce
 from importlib import import_module
 
@@ -90,6 +91,17 @@ def camel_to_snake(name):
     """
     name = re.sub('(.)([A-Z][a-z]+)', r'\1_\2', name)
     return re.sub('([a-z0-9])([A-Z])', r'\1_\2', name).lower()
+
+
+def remove_diacritics(text):
+    """
+    Returns a string with all diacritics (aka non-spacing marks) removed.
+    For example "Héllô" will become "Hello".
+    Useful for comparing strings in an accent-insensitive fashion.
+    https://stackoverflow.com/a/35783136
+    """
+    normalized = unicodedata.normalize("NFKD", text)
+    return "".join(c for c in normalized if unicodedata.category(c) != "Mn")
 
 
 # == [SYS] ==

@@ -770,7 +770,7 @@ class SchedulesMixin:
             leagues_ids = SPORTS_LEAGUES_MAP.get(str(sport_id))
             for league_id in leagues_ids:
                 r = fetch(LEAGUE_SEASON_EVENTS, id=str(league_id), s=season)
-                events = r.get('events')
+                events = r.get('events', [])
                 if events:
                     for data in events:
                         event = SportEvent(data)
@@ -786,8 +786,6 @@ class SchedulesMixin:
             f"saving event (sport `{event.get('strSport') or UNKNOWN}`) #" \
             f"{event.get(self.db_id_field, event['idEvent'])} to db: " \
             f"{detail}"
-
-        self.log_started(log_msg, '...')
 
         try:
             adapter = ItemAdapter(event)

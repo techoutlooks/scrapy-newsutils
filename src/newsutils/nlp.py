@@ -1,16 +1,20 @@
+import datetime
+import hashlib
+from typing import Iterable
+
 from bson import ObjectId
 
 from daily_query.helpers import mk_datetime
 from newsnlp import TextSummarizer, TitleSummarizer, Categorizer, TfidfVectorizer
 
-from newsutils.conf import LINK
+from newsutils.conf import LINK, TaskTypes
 from newsutils.conf.mixins import PostConfigMixin
 from newsutils.crawl import Day
 from newsutils.helpers import wordcount, uniquedicts, dictdiff, add_fullstop, import_attr
 from newsutils.crawl.items import BOT, THIS_PAPER
 from newsutils.conf.post_item import Post, mk_post
 from newsutils.conf import \
-    TITLE, METAPOST, SCORE, COUNTRY, TYPE, AUTHORS, PUBLISH_TIME, \
+    TITLE, METAPOST, SCORE, COUNTRY, TYPE, AUTHORS, PUBLISH_TIME, VERSION, \
     MODIFIED_TIME, IMAGES, VIDEOS, TAGS, IS_DRAFT, IS_SCRAP, KEYWORDS, TOP_IMAGE, PAPER, UNKNOWN, \
     get_setting
 
@@ -18,38 +22,37 @@ from newsutils.conf import \
 CATEGORY_NOT_FOUND = 'N/A'
 
 
-# default metapost link creator function.
-# referenced by default `metapost_link_creator` project setting.
-create_metapost_link = lambda baseurl, db_id_field: "%s/%s" % (
-    baseurl.strip("/"), db_id_field)
-
-
-def set_create_metapost_link():
-    """
-    Initialises the metapost link creator function from setting `metapost_link_creator`.
-    Setting value must be the dotted path (string) referencing the create link function.
-
-    Loads default implementation (`create_metapost_link`) if no user-defined value set.
-    """
-    global create_metapost_link
-    value = get_setting('POSTS.metapost_link_creator')
-    create_metapost_link = import_attr(value)
-
-
-set_create_metapost_link()
-
-
 class DayNlp(Day, PostConfigMixin):
     """
     Helper to perform NLP on posts scraped a given day .
+    Performs following tasks, operating as a whole, on the posts generated any given day:
+    - Compute and update similarity scores of all posts with given date, to the db
+    - Generate and save metaposts from sibling posts; cf. below note (1).
+
+    Notes:
+    ------
+        (1) Similar posts of a given post are split in two categories:
+          - sibling posts, with a similarity score >= `settings['POSTS'].similarity_siblings_threshold`
+          - related posts, with a similarity score >= `settings['POSTS'].similarity_related_threshold`,
+            but inferior to `.similarity_siblings_threshold`.
+        (3) Meta posts are posts with type `metapost.*` (* in ['default', 'featured'] summarised from
+            the siblings of any given post into their 'caption', 'summary', and 'category' attributes.
 
     FIXME: bugs if generating metaposts before computing similarity.
     """
 
+    # TODO: multi-language
     lang = "fr"
 
     def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)  # sets `self.day` as collection
+
+        # set task_type -> NLP so we don't load nor add metaposts to loaded posts (ie. `self.posts`)
+        # cf. `Day.save()`
+        super().__init__(*args, task_type=TaskTypes.NLP, **kwargs)
+
+        # processing start, both for timing execution, and as a checkpoint
+        # to recognize new data (eg. posts edited/inserted by this process)
+        self.start_time = datetime.datetime.now(datetime.timezone.utc)
 
         self.counts = dict(
             # resp. total posts processed/saved, words processed
@@ -76,7 +79,7 @@ class DayNlp(Day, PostConfigMixin):
             params = {
                 "similarity": {},
                 "summary": {},
-                METAPOST: {'link_creator': create_metapost_link},
+                METAPOST: {},
             }
 
             # no verb, runs them all !
@@ -106,16 +109,18 @@ class DayNlp(Day, PostConfigMixin):
         :param bool overlap: include results from higher thresholds into lower ones?
         :returns: saved (post, count).
         :rtype: (Post, int)
+
+        TODO: use only half the symmetric TF-IDF matrix to speed up the task
+        TODO: use optimised TF-IDF function from Spacy or Sklearn, instead of hand-crafted one
         """
 
         # uses tfidf model to vectorise title+text of entire article corpus
         # `.similarity` holds params for the model's `similar_to` api.
-        similar, saved = {}, 0 # 6290f008684d82f5922dfac7
-        log_msg = lambda saved: \
+        similar, saved = {}, 0
+        log_msg = \
             f"{'' if saved else 'NOT'} saving `{list(self.similarity)}` similarity " \
             f"({saved}) siblings, for doc #{post[self.db_id_field]} ..."
 
-        self.log_started(log_msg, saved)
         for field, tfidf_params in self.similarity.items():
 
             # compute similar_docs and transform as db format, like so:
@@ -133,13 +138,14 @@ class DayNlp(Day, PostConfigMixin):
 
         try:
             if similar:
-                post, saved = self.save(Post({**post, **similar}))
-            self.log_ok(log_msg, saved=saved)
+                post = self.save(Post({**post, **similar}))
+            self.log_ok(log_msg)
 
         except Exception as exc:
             self.log_failed(log_msg, exc, saved)
 
-        self.counts["similarity"] = saved
+        saved = int(bool(post))
+        self.counts["similarity"] += saved
         return post, saved
 
     def save_summary(self, post: Post, **kwargs):
@@ -151,20 +157,18 @@ class DayNlp(Day, PostConfigMixin):
         :rtype: (Post, int)
          """
 
-        saved: int = 0
         text = self.get_decision("get_post_text")(post)
         summary, caption, categories = self.get_summary(text)
         category = categories[0][0] if categories else CATEGORY_NOT_FOUND
 
-        log_msg = lambda: \
+        log_msg = \
             f"generating `summary` for doc #`{post[self.db_id_field]}`: " \
             f"summary: ({wordcount(summary)}/{wordcount(text)}) words, " \
             f"caption: ({wordcount(caption)}/{wordcount(post[TITLE])}) words, " \
             f"category: `{category}`."
 
-        self.log_started(log_msg)
         try:
-            post, saved = self.save(Post({
+            post = self.save(Post({
                 **post,
                 self.caption_field: caption,
                 self.summary_field: summary,
@@ -174,7 +178,8 @@ class DayNlp(Day, PostConfigMixin):
         except Exception as exc:
             self.log_failed(log_msg, exc)
 
-        self.counts["summary"] = saved
+        saved = int(bool(post))
+        self.counts["summary"] += saved
         return post, saved
 
     def save_metapost(self, src: Post, **kwargs):
@@ -182,31 +187,36 @@ class DayNlp(Day, PostConfigMixin):
          and save it to the database in the metapost's collection. """
 
         metapost, saved = None, 0
-        log_msg = lambda status: \
+        log_msg = \
             f"generating `{METAPOST}` " \
-            f"{'#' + str(metapost[self.db_id_field]) if status else ''} " \
+            f"{'#' + str(metapost[self.db_id_field]) if metapost else ''} " \
             f"for post #{src[self.db_id_field]}: "
 
-        self.log_started(log_msg, saved)
-        metapost = self.mk_metapost(src, **kwargs)
+        metapost, lookup_version = self.mk_metapost(src, **kwargs)
         if metapost:
             try:
-                metapost, saved = self.save(metapost)
-                self.log_ok(log_msg, saved)
+                # checks if exists a previous version of metapost in the db.
+                # only alters posts with same type, ie. `metapost.*`
+                metapost = self.save(metapost, only=(TYPE,),
+                                     id_field_or_match={'version': lookup_version})
+                self.log_ok(log_msg)
             except Exception as exc:
-                self.log_failed(log_msg, exc, saved)
+                self.log_failed(log_msg, exc)
 
-        self.counts[METAPOST] = saved
+        saved = int(bool(metapost))
+        self.counts[METAPOST] += saved
         return metapost, saved
 
-    def mk_metapost(self, src: Post, link_creator=None):
+    def mk_metapost(self, src: Post, **kwargs):
         """ Generate a meta post by compiling all siblings
         of the given post, given the configured strategy.
 
-        Nota: meta posts do NOT have following fields:
-        TITLE, TEXT, EXCERPT, LINK, SHORT_LINK, LINK_HASH
-        They are meaningless given that metaposts are summarized from multiple posts,
-        and that the summarisation engine only generates the caption, title, and category fields.
+        Nota:
+        -----
+        (1) meta posts do NOT have following fields: TITLE, TEXT, EXCERPT, LINK, SHORT_LINK, LINK_HASH
+            They are meaningless given that metaposts are summarized from multiple posts,
+            and that the summarisation engine only generates the caption, title, and category fields.
+        (2) No `_id` field is generated from metaposts. This is left to the database engine.
 
         CAUTION: relies on `.save_summary()` to set values for fields `siblings`, `related`
 
@@ -215,12 +225,12 @@ class DayNlp(Day, PostConfigMixin):
             trim each text according to num_texts/1024 ratio.
 
         :returns: saved (metapost, count).
-        :rtype: (Post, int)
+        :rtype: Post
         """
 
-        # TODO: strategy to get metapost from other methods than TF-IDF,
-        #   eg. kNN, kernels?
-        metapost = None
+        # TODO: leverage fact that similarity is a symmetric function to improve speed by x2.
+        # TODO: strategy to get metapost from other methods than TF-IDF, eg. kNN, kernels?
+        metapost, lookup_version = None, None
         siblings = self.get_similar(src, from_field=self.siblings_field)
         siblings, _ = zip(*siblings) if siblings else ([], [])
         siblings_texts = [self.get_decision("get_post_text")(p, meta=True) for p in siblings]
@@ -230,13 +240,16 @@ class DayNlp(Day, PostConfigMixin):
         if _text:
             metapost = mk_post()
 
-            # make a unique, yet predictable db_id by summing siblings ids.
-            # this guarantees db UPSERT-ion instead of invariably creating a new
-            # metapost on every call. '0xc50e7a9799d7b9bb887365b8'
-            hex_sum = hex(sum([int(f"0x{str(p[self.db_id_field])}", 16) for p in siblings]))
-            metapost[self.db_id_field] = ObjectId(hex_sum[2:2 + 24])  # strip `0x`, keep 24 characters
+            # `lookup_version`: possible existing database version of this metapost
+            # It corresponds to previous siblings of this post, ie. that were not added by the current process.
+            old_siblings = filter(lambda p: p[self.db_id_field].generation_time <= self.start_time, siblings)
+            lookup_version = self.mk_version(old_siblings)
 
-            # nlp fields
+            # the current version
+            # ie. after `.save_similarity()` may have added more siblings to `src` post.
+            metapost[VERSION] = self.mk_version(siblings)
+
+            # NLP fields
             summary, caption, categories = self.get_summary(_text)
             category = categories[0][0] if categories else CATEGORY_NOT_FOUND
             metapost[self.category_field] = category
@@ -258,6 +271,7 @@ class DayNlp(Day, PostConfigMixin):
             metapost[TOP_IMAGE] = siblings[0][TOP_IMAGE]
             metapost[PAPER] = THIS_PAPER
             metapost[AUTHORS] = [BOT]
+            metapost[LINK] = None
 
             # compile misc. data from siblings into metapost:
             # bool fields, str list fields, dict list fields
@@ -270,12 +284,14 @@ class DayNlp(Day, PostConfigMixin):
                 for f in AUTHORS, :  # dicts
                     metapost[f] = uniquedicts(metapost[f], post[f])
 
-            # generate metapost link from user-defined creator func if any
-            # default joins baseurl picked from the env and the metapost id
-            link = self.get_decision('get_metapost_link')(metapost, create_metapost_link)
-            metapost[LINK] = link
+        return metapost, lookup_version
 
-        return metapost
+    def mk_version(self, posts: Iterable[Post]) -> str:
+        """ Predictable version for metapost generated from posts """
+        _posts = sorted(posts, key=lambda p: p[self.db_id_field].generation_time)
+        return hashlib.md5(
+            ''.join([str(p[self.db_id_field]) for p in _posts]).encode()
+        ).hexdigest()
 
     def get_similar(self, post, from_field=None, **kwargs):
         """
