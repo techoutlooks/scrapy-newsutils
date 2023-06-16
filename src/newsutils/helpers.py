@@ -46,6 +46,9 @@ dictlist_factory = lambda op: lambda *dict_lists: reduce(
 )
 
 
+evalfn = lambda f: f()
+
+
 # difference and union of lists of dicts,
 # eg. dictdiff([d_11, d_12, ...], [d_21, d_22, ...], ...)
 dictdiff = dictlist_factory('difference')
@@ -87,7 +90,7 @@ def add_fullstop(sent: str):
 
 def camel_to_snake(name):
     """
-    AriseNews -> arise_news
+    LeeramNews -> leeram_news
     """
     name = re.sub('(.)([A-Z][a-z]+)', r'\1_\2', name)
     return re.sub('([a-z0-9])([A-Z])', r'\1_\2', name).lower()
@@ -157,11 +160,9 @@ def import_attr(path):
     module, attr = path.rsplit(".", 1)
     try:
         mod = import_module(module)
-    except (ImportError, ValueError) as err:
-        raise ImportError(
-            'Error importing module %s: "%s"' % (path, err))
-    try:
         cls = getattr(mod, attr)
+    except (ImportError, ValueError) as err:
+        raise ImportError('Error importing module %s: "%s"' % (path, err))
     except AttributeError:
         raise ImportError('Module "%s" does not define a "%s" attribute' % (module, attr))
     return cls
@@ -180,6 +181,7 @@ def import_module_custom(module):
     if not inspect.ismodule(module):
         raise ImportError(f"Can't import settings {module}")
     return module
+
 
 
 # == [DECORATORS] ==

@@ -4,7 +4,7 @@ from bson import ObjectId
 from itemadapter import ItemAdapter
 
 from daily_query.helpers import mk_date
-from daily_query.mongo import Collection
+from daily_query.mongo import Collection, Doc
 
 from ..helpers import compose, dotdict
 from ..conf.post_item import Post
@@ -112,13 +112,17 @@ class Day(PostStrategyMixin, Collection):
         :rtype: Post
         """
 
-        db_post, created = None, False
-        log_msg = lambda detail: \
-            f"saving post (type `{post.get(TYPE) or UNKNOWN}`) #" \
-            f"{post.get(self.db_id_field, post[SHORT_LINK])} to db: " \
-            f"{detail}"
+        def set_metapost_link(d: Doc):
+            d['link'] = self.get_decision('get_metapost_link')(d)
+            return d
 
-        self.log_started(log_msg, '...')
+        db_post, created = None, False
+        log_msg = lambda post=post, detail=None: \
+            f"saving post (type `{post.get(TYPE) or UNKNOWN}`) #" \
+            f"{post.get(self.db_id_field, post[SHORT_LINK])} to the db: " \
+            f"{detail or '...'}"
+
+        self.log_started(log_msg)
         try:
             adapter = ItemAdapter(post)
             match = {f: adapter.item.get(f) for f in (only or [])}
@@ -130,7 +134,8 @@ class Day(PostStrategyMixin, Collection):
                     else ObjectId(adapter.item.get(self.db_id_field, None))
                 match.update({id_key: id_value})
 
-            db_post = self.update_or_create(adapter.asdict(), **match)
+            db_post, r = self.update_or_create(
+                adapter.asdict(), transform=set_metapost_link, **match)
 
             # also, reflect update in mem cache according to strategy,
             # iff the db update was successful. eg., don't update metaposts
@@ -141,9 +146,11 @@ class Day(PostStrategyMixin, Collection):
                 if self.get_decision("filter_metapost")(db_post, self.task_type):
                     self[db_post_id] = db_post
 
-            self.log_ok(log_msg, "...")
+            # log
+            op = 'inserted' if r.upserted_id else 'updated'
+            self.log_ok(log_msg, post=db_post, detail=f"{op} ({r.modified_count}/{r.matched_count})")
 
         except Exception as exc:
-            self.log_failed(log_msg, exc, '')
+            self.log_failed(log_msg, exc)
 
         return db_post

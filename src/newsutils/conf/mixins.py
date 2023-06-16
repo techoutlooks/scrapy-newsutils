@@ -2,14 +2,39 @@ from collections import OrderedDict
 
 from scrapy.utils.project import get_project_settings
 
+from . import get_setting
 from .constants import TaskTypes, EXCERPT, TITLE, TEXT
-from ..helpers import add_fullstop, get_env
+from ..helpers import add_fullstop, get_env, import_attr, evalfn
 from ..logging import TaskLoggerMixin
 
 
 __all__ = (
     "BaseConfigMixin", "PostStrategyMixin", "PostConfigMixin",
+    "metapost_link_factory"
 )
+
+
+# metapost link creator function.
+# this is patched dynamically with the callable referenced by the
+# `POSTS.metapost_link_creator` project setting (`src/newsutils/conf/posts.py`).
+metapost_link_factory = lambda baseurl, db_id_field: "%s/%s" % (
+    baseurl.strip("/"), db_id_field)
+
+
+@evalfn  # auto-setup factory on init.
+def _set_metapost_link_factory():
+    """
+    Dynamically load the metapost link factory function, used to generate the metapost's `link` and
+    `short_link` attributes.
+    from the `POSTS.metapost_link_creator` Scrapy setting. The setting's value must be
+    a dotted path (string) referencing the create link function.
+
+    If no user-defined factory set, loads the default factory (`newsutils.conf.mixins.metapost_link_factory`)
+    which merely concatenates `POSTS.metapost_baseurl` with the metapost's `id_field`.
+    """
+    global metapost_link_factory
+    value = get_setting('POSTS.metapost_link_factory')
+    metapost_link_factory = import_attr(value)
 
 
 class BaseConfigMixin(TaskLoggerMixin):
@@ -128,8 +153,13 @@ class PostStrategyMixin(PostConfigMixin):
 
             return add_fullstop(post[title]) + " " + (post[text] or "")
 
+        def get_metapost_link(metapost):
+            baseurl = cls.settings['POSTS']['metapost_baseurl']
+            return metapost_link_factory(baseurl, str(metapost[cls.db_id_field]))
+
         return {
             "filter_metapost": filter_metapost,
             "get_post_text": get_post_text,
+            "get_metapost_link": get_metapost_link
         }.get(rule)
 

@@ -9,30 +9,21 @@
   - Use TF-IDF from Spacy or SkLearn 
   - Resume vectorization of corpus where last task left off.
     This implies saving vectorization result to disk, and merging with docs newly added to the db. 
+  - Cython ??
+  - 
+## Setup the demo 
 
-## Python env setup 
-
+* Setup python env 
 ```shell
-python -m pip install pip-tools
-pip-compile --output-file=demo/requirements.txt
+python -m venv venv && source venv/bin/activate
+pip install -r requirements.txt
 ```
 
-## Env vars setup
-
-```shell
-# posts
-METAPOST_BASEURL=http://localhost:3100/posts
-
-# networks
-FACEBOOK_PAGE_ID= \
-FACEBOOK_PAGE_ACCESS_TOKEN=
-```
-
+* Set envvars
 ```shell
 export \
     PROJECT_SETTINGS_MODULE=crawler.settings \
-    POSTS=metapost_baseurl=${METAPOST_BASEURL} \
-    PUBLISH=facebook_page_id=${FACEBOOK_PAGE_ID},facebook_page_access_token=${FACEBOOK_PAGE_ACCESS_TOKEN}
+    METAPOST_BASEURL = 'http://localhost:3000/posts/'
 ```
 
 ## Run commands
@@ -42,9 +33,4 @@ scrapy publish facebook,twitter -p -D from=2023-03-21 -M metrics=follows,likes,v
 ```
 
 
-## TODO
-
-### Optimisation
-
-* 
 

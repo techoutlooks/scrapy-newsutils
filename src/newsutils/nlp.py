@@ -1,13 +1,12 @@
 import datetime
 import hashlib
 from typing import Iterable
-
-from bson import ObjectId
+from urllib.parse import urlparse
 
 from daily_query.helpers import mk_datetime
 from newsnlp import TextSummarizer, TitleSummarizer, Categorizer, TfidfVectorizer
 
-from newsutils.conf import LINK, TaskTypes
+from newsutils.conf import LINK, TaskTypes, SHORT_LINK, LINK_HASH
 from newsutils.conf.mixins import PostConfigMixin
 from newsutils.crawl import Day
 from newsutils.helpers import wordcount, uniquedicts, dictdiff, add_fullstop, import_attr
@@ -213,7 +212,7 @@ class DayNlp(Day, PostConfigMixin):
 
         Nota:
         -----
-        (1) meta posts do NOT have following fields: TITLE, TEXT, EXCERPT, LINK, SHORT_LINK, LINK_HASH
+        (1) meta posts do NOT have following fields: TITLE, TEXT, EXCERPT.
             They are meaningless given that metaposts are summarized from multiple posts,
             and that the summarisation engine only generates the caption, title, and category fields.
         (2) No `_id` field is generated from metaposts. This is left to the database engine.
@@ -243,11 +242,11 @@ class DayNlp(Day, PostConfigMixin):
             # `lookup_version`: possible existing database version of this metapost
             # It corresponds to previous siblings of this post, ie. that were not added by the current process.
             old_siblings = filter(lambda p: p[self.db_id_field].generation_time <= self.start_time, siblings)
-            lookup_version = self.mk_version(old_siblings)
+            lookup_version = self.mk_metapost_version(old_siblings)
 
             # the current version
             # ie. after `.save_similarity()` may have added more siblings to `src` post.
-            metapost[VERSION] = self.mk_version(siblings)
+            metapost[VERSION] = self.mk_metapost_version(siblings)
 
             # NLP fields
             summary, caption, categories = self.get_summary(_text)
@@ -271,7 +270,6 @@ class DayNlp(Day, PostConfigMixin):
             metapost[TOP_IMAGE] = siblings[0][TOP_IMAGE]
             metapost[PAPER] = THIS_PAPER
             metapost[AUTHORS] = [BOT]
-            metapost[LINK] = None
 
             # compile misc. data from siblings into metapost:
             # bool fields, str list fields, dict list fields
@@ -284,9 +282,17 @@ class DayNlp(Day, PostConfigMixin):
                 for f in AUTHORS, :  # dicts
                     metapost[f] = uniquedicts(metapost[f], post[f])
 
+            # generate metapost link from user-defined creator func if any
+            # default joins baseurl picked from the env and the metapost id
+            link = self.get_decision('get_metapost_link')(metapost)
+            short_link = urlparse(link).path
+            metapost[SHORT_LINK] = short_link
+            metapost[LINK] = link
+            metapost[LINK_HASH] = hashlib.md5(short_link.encode()).hexdigest()
+
         return metapost, lookup_version
 
-    def mk_version(self, posts: Iterable[Post]) -> str:
+    def mk_metapost_version(self, posts: Iterable[Post]) -> str:
         """ Predictable version for metapost generated from posts """
         _posts = sorted(posts, key=lambda p: p[self.db_id_field].generation_time)
         return hashlib.md5(

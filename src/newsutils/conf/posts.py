@@ -132,6 +132,8 @@ class Posts(AppSettings):
         "nlp_uses_meta": False,
         "summary_uses_nlp": False,
         "meta_uses_nlp": True,
+        "metapost_baseurl": None,   # required
+        "metapost_link_factory": 'newsutils.conf.mixins.metapost_link_factory',
 
         # PIPELINES
         # =============================================================================================
