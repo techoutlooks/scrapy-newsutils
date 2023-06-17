@@ -1,5 +1,6 @@
 import datetime
 import hashlib
+import time
 from typing import Iterable
 from urllib.parse import urlparse
 
@@ -212,14 +213,13 @@ class DayNlp(Day, PostConfigMixin):
 
         Nota:
         -----
-        (1) meta posts do NOT have following fields: TITLE, TEXT, EXCERPT.
-            They are meaningless given that metaposts are summarized from multiple posts,
-            and that the summarisation engine only generates the caption, title, and category fields.
+        (1) meta posts do NOT set following fields: TITLE, TEXT, EXCERPT.
+            Instead, summarization assigns following fields: 'caption', 'title', 'category'.
         (2) No `_id` field is generated from metaposts. This is left to the database engine.
 
         CAUTION: relies on `.save_summary()` to set values for fields `siblings`, `related`
 
-        FIXME: summarizer currently only supports 1024 words max.
+        TODO: summarizer currently only supports 1024 words max.
             find more powerful model? push model capacity?
             trim each text according to num_texts/1024 ratio.
 
@@ -248,7 +248,7 @@ class DayNlp(Day, PostConfigMixin):
             # ie. after `.save_similarity()` may have added more siblings to `src` post.
             metapost[VERSION] = self.mk_metapost_version(siblings)
 
-            # NLP fields
+            # NLP fields. Models inference happen here.
             summary, caption, categories = self.get_summary(_text)
             category = categories[0][0] if categories else CATEGORY_NOT_FOUND
             metapost[self.category_field] = category
@@ -288,7 +288,10 @@ class DayNlp(Day, PostConfigMixin):
             short_link = urlparse(link).path
             metapost[SHORT_LINK] = short_link
             metapost[LINK] = link
-            metapost[LINK_HASH] = hashlib.md5(short_link.encode()).hexdigest()
+
+            # link hash constructed in the same was as for regular posts by newspaper3k
+            metapost[LINK_HASH] = '%s.%s' % (
+                hashlib.md5(short_link.encode('utf-8', 'replace')).hexdigest(), time.time())
 
         return metapost, lookup_version
 

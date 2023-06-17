@@ -40,7 +40,7 @@ def configure():
     Results in following call returning merged settings:
         `from scrapy.utils.project import get_project_settings`
 
-    Project-defined settings module is as referenced by the `PROJECT_SETTINGS_MODULE` (dotted module name).
+    Project-defined settings module is as referenced by the `SCRAPY_SETTINGS_MODULE` (dotted module name).
 
     Usage:
 

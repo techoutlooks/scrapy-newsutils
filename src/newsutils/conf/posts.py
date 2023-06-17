@@ -8,12 +8,12 @@ __all__ = ("configure_posts",)
 
 
 # Dotted path to Project settings module.
-# eg. PROJECT_SETTINGS_MODULE=crawl.settings
-PROJECT_SETTINGS_MODULE = get_env('PROJECT_SETTINGS_MODULE')
+# eg. SCRAPY_SETTINGS_MODULE=crawl.settings
+settings_module = get_env('SCRAPY_SETTINGS_MODULE')
 
 # defaults for computed field names as
 # populated/persisted by the `NlpDaily` util class
-_NLP_BASE_FIELDS_CONF = {
+_nlp_base_fields_conf = {
 
     # summarization
     "CATEGORY_FIELD": "category",
@@ -30,7 +30,7 @@ _NLP_BASE_FIELDS_CONF = {
 # TODO?: prefix with `DEFAULT_` ??
 # FIXME: make `item_id_field`, `NLP_FIELDS` lazily loaded
 #       since they depend on other dynamics settings.
-_DB_ID_FIELD = "_id"
+_db_id_field = "_id"
 _item_id_field = SHORT_LINK
 
 
@@ -45,7 +45,7 @@ def configure_posts():
 
     # inject app-defined settings (`Posts`) inside the Scrapy settings,
     # merges (resp. to precedence) env-defined, project-defined and default settings.
-    settings = Posts()(PROJECT_SETTINGS_MODULE, 'scrapy.settings.default_settings')
+    settings = Posts()(settings_module, 'scrapy.settings.default_settings')
 
     # == [ COMPUTED SETTINGS] ==
     # define `computed` settings, typically computed based on other configurable settings.
@@ -54,7 +54,7 @@ def configure_posts():
     posts_config = settings.config
 
     posts_config["NLP_BASE_FIELDS"] = \
-        [posts_config[f] for f in list(_NLP_BASE_FIELDS_CONF)]
+        [posts_config[f] for f in list(_nlp_base_fields_conf)]
 
     posts_config["NLP_FIELDS"] = \
          posts_config["NLP_BASE_FIELDS"] + \
@@ -100,7 +100,7 @@ class Posts(AppSettings):
     CRAWL_DB_URI = 'mongodb://localhost:27017/scraped_news_db'
 
     # DB_ID_FIELD: row id from the database engine
-    DB_ID_FIELD = _DB_ID_FIELD
+    DB_ID_FIELD = _db_id_field
 
     BRANDING = {
         "bot_image_url": None,
@@ -118,7 +118,7 @@ class Posts(AppSettings):
 
         "auto_publish": True,
         "item_id_field": _item_id_field,
-        **_NLP_BASE_FIELDS_CONF,
+        **_nlp_base_fields_conf,
 
 
         # NLP
