@@ -1,0 +1,26 @@
+[
+  {
+    "name": "gn-africaguinee",
+    "allowed_domains": ["africaguinee.com"],
+    "start_urls": ["https://www.africaguinee.com/"],
+    "country_code": "GN",
+    "language": "fr",
+    "post_images": "//figure/img/@src",
+    "post_texts": {
+        "featured": "//*[contains(concat( \" \", @class, \" \" ), concat( \" \", \"views_slideshow_pager_field_item\", \" \" ))]//a",
+        "default": "//*/div/div/div/div/div/h3//a"
+    }
+  },
+    {
+    "name": "gn-guineematin ",
+    "allowed_domains": ["guineematin.com"],
+    "start_urls": ["https://guineematin.com/"],
+    "country_code": "GN",
+    "language": "fr",
+    "post_images": "//figure/img/@src",
+    "post_texts": {
+        "featured": "//*[(@id = \"tdi_82\")]//a | //*[(@id = \"tdi_84\")]//a",
+        "default": "//*[contains(concat( \" \", @class, \" \" ), concat( \" \", \"td-animation-stack\", \" \" ))]//a"
+    }
+  }
+]

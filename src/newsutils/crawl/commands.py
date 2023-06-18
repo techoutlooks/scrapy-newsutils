@@ -6,12 +6,13 @@ from scrapy.commands import ScrapyCommand
 
 from newsutils.conf.mixins import PostConfigMixin
 
-__all__ = ("DayCmd",)
+__all__ = ("PostCmd", "DayCmd",)
 
 from newsutils.exceptions import ImproperlyConfigured
 
 
-class Cmd(PostConfigMixin, ScrapyCommand):
+class PostCmd(PostConfigMixin, ScrapyCommand):
+    """ Post-aware command for buidling smart tasks. """
 
     @property
     def name(self):
@@ -24,7 +25,7 @@ class Cmd(PostConfigMixin, ScrapyCommand):
         return self.name
 
     def is_running(self) -> psutil.Process:
-        """ whether another instance of the command is running already """
+        """ Whether another instance of this command is already running. """
         for proc in psutil.process_iter():
             try:
                 # search command line of any process
@@ -37,7 +38,7 @@ class Cmd(PostConfigMixin, ScrapyCommand):
         return None
 
 
-class DayCmd(Cmd):
+class DayCmd(PostCmd):
     """
     Base command for tasks that run daily.
     TODO: implement, then refactor code in newsbot.crawl.commands

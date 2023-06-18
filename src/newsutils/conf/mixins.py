@@ -69,15 +69,15 @@ class PostConfigMixin(BaseConfigMixin):
     item_id_field = settings['POSTS']['item_id_field']
 
     # NLP FIELDS
-    caption_field = settings['POSTS']['CAPTION_FIELD']
-    category_field = settings['POSTS']["CATEGORY_FIELD"]
-    summary_field = settings['POSTS']['SUMMARY_FIELD']
-    siblings_field = settings['POSTS']["SIBLINGS_FIELD"]
-    related_field = settings['POSTS']["RELATED_FIELD"]
+    caption_field = settings['POSTS']['caption_field']
+    category_field = settings['POSTS']["category_field"]
+    summary_field = settings['POSTS']['summary_field']
+    siblings_field = settings['POSTS']["siblings_field"]
+    related_field = settings['POSTS']["related_field"]
 
     # MISC FIELDS
-    computed_fields = settings['POSTS']['COMPUTED_FIELDS']
-    edits_excluded_fields = settings['POSTS']["EDITS_EXCLUDED_FIELDS"]
+    computed_fields = settings['POSTS']['computed_fields']
+    edits_excluded_fields = settings['POSTS']["edits_excluded_fields"]
     edits_new_version_fields = settings['POSTS']["edits_new_version_fields"]
     image_min_size = settings['POSTS']['image_min_size']
     image_brisque_max_score = settings['POSTS']['image_brisque_max_score']

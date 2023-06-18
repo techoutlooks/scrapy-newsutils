@@ -1,7 +1,11 @@
 import abc
+from typing import Mapping
 
 import nltk
 import pycountry
+import scrapy
+from lxml.etree import XPath
+from scrapy.item import ItemMeta
 
 from newsutils.logging import LoggingMixin, FAILED, OK, PADDING
 from newsutils.logo import parse_logo
@@ -14,14 +18,13 @@ from newspaper import Article, build
 
 from .items import Author, Paper
 from newsutils.conf.post_item import Post, mk_post
-from newsutils.conf import TYPE
-
+from newsutils.conf import TYPE, get_setting
 
 nltk.download('punkt')
 
 
 __all__ = [
-    "PostCrawlerMeta", "PostCrawlerMixin", "BasePostCrawler",
+    "PostCrawlerMeta", "PostCrawlerMixin", "BasePostCrawler", "PostCrawlerContext",
     "DEFAULT_POST", "FEATURED_POST"
 ]
 
@@ -33,7 +36,7 @@ FEATURED_POST = "featured"
 
 class PostCrawlerMeta(abc.ABCMeta):
     """
-    Custom post crawl
+    Sets crawl rules dynamically based on the `.post_texts` classproperty.
     https://realpython.com/python-metaclasses/
     https://www.geeksforgeeks.org/__new__-in-python/
     """
@@ -45,24 +48,20 @@ class PostCrawlerMeta(abc.ABCMeta):
         # chance to initialise `.settings` and connect the `spider_closed` signal
         # https://stackoverflow.com/a/27514672, https://stackoverflow.com/a/25352434
 
-        # DELETEME
-        # from newsutils import get_project_settings
-        # crawl.settings = get_project_settings()
-
         crawler.rules = [
             Rule(LinkExtractor(restrict_xpaths=[xpath]),
                  callback='parse_post',
                  cb_kwargs={TYPE: key},
                  follow=False)
-            for (key, xpath) in crawler.post_types_xpaths.items()
-            if crawler.post_types_xpaths[key]
+            for (key, xpath) in crawler.post_texts.items()
+            if crawler.post_texts[key]
         ]
         return crawler
 
 
 class PostCrawlerMixin(LoggingMixin):
     """
-    Generic (abstract) articles spider.
+    Post spider template.
     Attributes here are re-used extensively by post pipelines,
     ie., PostMixin subclasses.
 
@@ -70,8 +69,9 @@ class PostCrawlerMixin(LoggingMixin):
         `post.keywords` does mere word frequency analysis.
     """
 
-    # custom props
+    # PostCrawler template & defaults
     # nota: will get overridden by `init()` kwargs
+    # -----------------------------------------------------------------------------------------------
     country_code = None         # Alpha‑2 ISO 3166 country code
     language = None             # language of post
 
@@ -81,57 +81,18 @@ class PostCrawlerMixin(LoggingMixin):
     days_to: str = None              # crawl_all posts published at most  `days_to`;  today if None.
     days: [str] = []                   # single dates
 
-    # pull posts from pages links extracted in turn by below xpaths only.
-    # default, featured: XPath to resp. regular, featured posts
+    # scrap posts only from pages links extracted by below xpath strings.
+    # eg. 'default', 'featured': are XPath lookup strings for resp. the regular, and featured posts types.
     # https://devhints.io/xpath
-    post_types_xpaths = {
+    post_images: str = None
+    post_texts: Mapping[str, str] = {
         FEATURED_POST: None,
         DEFAULT_POST: None,
     }
 
-    # per post
-    post_images_xpath = None
+    # -----------------------------------------------------------------------------------------------
 
-    def prepare(self, *args, days={}, **kwargs):
-        """
-
-        :param args:
-        :param days:
-        :param kwargs:
-        :return:
-        """
-        # FIXME: should pop cmdline opts from kwargs? eg. 'from', 'to'
-
-        # required fields
-        assert self.country_code, "`country_code` (ISO 3166-1) field required"
-        assert self.post_types_xpaths, "`post_types_xpaths` field required"
-
-        # clean user input, set defaults
-        # cmdline args (kwargs) have priority over class attributes!
-        self.days = days.get('days', self.days)
-        self.days_from = days.get('days_from', self.days_from)
-        self.days_to = days.get('days_to', self.days_to)
-
-        if not self.language:
-            self.language = self.settings["POSTS"]['default_lang']
-
-        # compute filter dates for crawling
-        self.filter_dates = parse_dates(
-            days_from=self.days_from, days_to=self.days_to,
-            days=self.days)
-
-    @property
-    def country(self):
-        """ Country object from country code """
-        return pycountry.countries.get(alpha_2=self.country_code)
-
-    def get_authors(self, article: Article, response=None):
-        """ Articles authors. """
-        return list(map(lambda name: Author(
-            name=name, profile_image="", role=""
-        ), article.authors))
-
-    def parse_post(self, response, type) -> Post:
+    def parse_post(self, response, type: str) -> Post:
 
         a = Article(response.url)
         a.download()
@@ -188,16 +149,52 @@ class PostCrawlerMixin(LoggingMixin):
             might be later deleted by the `DropLowQualityImages`
         """
         images = []
-        if self.post_images_xpath:
+        if self.post_images:
             try:
-                images = response.xpath(self.post_images_xpath).extract()
+                images = response.xpath(self.post_images).extract()
             except ValueError as e:
-                self.log_info(f'{FAILED:<{PADDING}}{self.post_images_xpath}')
+                self.log_info(f'{FAILED:<{PADDING}}{self.post_images}')
                 self.log_debug(str(e))
 
         images = images or list(article3k.images)
         top_image = images[0] if images else article3k.top_image
         return images, top_image
+
+    def get_post_context(self, *args, days={}, **kwargs):
+        """ Builds/checks context for all posts to be scraped by this spider
+        eg. language, days range to scrape, etc.
+        """
+        # FIXME: should pop cmdline opts from kwargs? eg. 'from', 'to'
+
+        # required fields
+        assert self.country_code, "`country_code` (ISO 3166-1) field required"
+        assert self.post_texts, "`post_texts` field required"
+
+        # clean user input, set defaults
+        # cmdline args (kwargs) have priority over class attributes!
+        _days = days.get('days', self.days)
+        _days_from = days.get('days_from', self.days_from)
+        _days_to = days.get('days_to', self.days_to)
+
+        language = self.language or self.settings["POSTS"]['default_lang']
+
+        # compute filter dates for crawling
+        filter_dates = parse_dates(
+            days_from=_days_from, days_to=_days_to, days=_days)
+
+        return dict(filter_dates=filter_dates, language=language)
+
+
+    @property
+    def country(self):
+        """ Country object from country code """
+        return pycountry.countries.get(alpha_2=self.country_code)
+
+    def get_authors(self, article: Article, response=None):
+        """ Articles authors. """
+        return list(map(lambda name: Author(
+            name=name, profile_image="", role=""
+        ), article.authors))
 
 
 class BasePostCrawler(PostCrawlerMixin, CrawlSpider, metaclass=PostCrawlerMeta):
@@ -213,7 +210,7 @@ class BasePostCrawler(PostCrawlerMixin, CrawlSpider, metaclass=PostCrawlerMeta):
 
     def __init__(self, *args, **kwargs):
 
-        self.prepare(*args, **kwargs)
+        self.__dict__.update(self.get_post_context(*args, **kwargs))
         self.source = build(self.start_urls[0], language=self.language)
         super().__init__(*args, **kwargs)
 
@@ -255,4 +252,31 @@ class BasePostCrawler(PostCrawlerMixin, CrawlSpider, metaclass=PostCrawlerMeta):
         post["paper"] = self.get_paper(response)
         return post
 
+
+class PostCrawlerContextMeta(ItemMeta):
+    """
+    `PostCrawlerContext` Item class creator
+    supports configurable fields (user-editable field names).
+    """
+
+    def __new__(mcs, class_name, bases, attrs):
+
+        computed = (get_setting('DB_ID_FIELD'), )
+        fields = (
+            # Scrapy-defined attributes
+            'name', 'start_urls', 'allowed_domains',
+            # custom attributes
+            'country_code', 'language', 'post_texts', 'post_images',
+            'days_from', 'days_to', 'days'
+        )
+        new_attrs = {f: scrapy.Field() for f in (*computed, *fields)}
+        new_attrs.update(attrs)
+        return super().__new__(mcs, class_name, bases, new_attrs)
+
+
+class PostCrawlerContext(scrapy.Item, metaclass=PostCrawlerContextMeta):
+    """
+    Context to initialise `BasePostCrawler` spider instances dynamically
+    """
+    pass
 

@@ -10,6 +10,7 @@ from bson import ObjectId
 
 from daily_query.mongo import Collection
 from itemadapter import ItemAdapter
+from ratelimit import sleep_and_retry, limits
 
 from newsutils.conf import UNKNOWN
 from newsutils.conf.mixins import BaseConfigMixin
@@ -694,6 +695,8 @@ class SportEvent(scrapy.Item):
         return ObjectId(oid)
 
 
+@sleep_and_retry
+@limits(calls=1, period=datetime.timedelta(seconds=60).total_seconds())
 def fetch(endpoint: str, **kwargs):
     params = kwargs
     url = BASE_URL + str(API_KEY) + endpoint

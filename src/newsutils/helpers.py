@@ -96,6 +96,11 @@ def camel_to_snake(name):
     return re.sub('([a-z0-9])([A-Z])', r'\1_\2', name).lower()
 
 
+def to_camel(word):
+    """ From any case to CamelCase """
+    return ''.join(x.capitalize() for x in re.split(r'\W+', word))
+
+
 def remove_diacritics(text):
     """
     Returns a string with all diacritics (aka non-spacing marks) removed.

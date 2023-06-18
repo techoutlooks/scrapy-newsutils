@@ -24,7 +24,7 @@ class PostMeta(ItemMeta):
     def __new__(mcs, class_name, bases, attrs):
 
         # adds user-defined attributes to Post item
-        new_attrs = {f: scrapy.Field() for f in get_setting('POSTS.COMPUTED_FIELDS')}
+        new_attrs = {f: scrapy.Field() for f in get_setting('POSTS.computed_fields')}
         new_attrs.update(attrs)
         return super().__new__(mcs, class_name, bases, new_attrs)
 
