@@ -1,4 +1,5 @@
 import abc
+import datetime
 from typing import Mapping
 
 import nltk
@@ -9,7 +10,7 @@ from scrapy.item import ItemMeta
 
 from newsutils.logging import LoggingMixin, FAILED, OK, PADDING
 from newsutils.logo import parse_logo
-from daily_query.helpers import parse_dates
+from daily_query.helpers import parse_dates, mk_datetime
 
 from scrapy.spiders import Rule, CrawlSpider
 from scrapy.linkextractors import LinkExtractor
@@ -89,13 +90,14 @@ class PostCrawlerMixin(LoggingMixin):
     # scrap posts only from pages links extracted by below xpath strings.
     # eg. 'default', 'featured': are XPath lookup strings for resp. the regular, and featured posts types.
     # https://devhints.io/xpath
-    post_images: str = None
     post_texts: Mapping[str, str] = {
         FEATURED_POST: None,
         DEFAULT_POST: None,
     }
 
-    # -----------------------------------------------------------------------------------------------
+    # extract images for scraped post
+    post_images: str = None
+
 
     def parse_post(self, response, type: str) -> Post:
 
@@ -109,7 +111,13 @@ class PostCrawlerMixin(LoggingMixin):
         a.nlp()
 
         short_link = a.url.replace(a.source_url, '')
-        images, top_image = self.parse_post_images(response, a)
+
+        # don't attempt parsing images that'd eventually be dropped
+        # by the `FilterDate` pipeline
+        publish_time = self.parse_post_time(a, coerce=True)
+        if publish_time.date() in self.filter_dates:
+            images, top_image = self.parse_post_images(response, a)
+
         self.log_info(f"{OK:<{PADDING}}" 
                       f"parsing (%d/%d) image(s) for post {short_link}"
                       % (len(images), len(list(a.images))))
@@ -122,7 +130,7 @@ class PostCrawlerMixin(LoggingMixin):
             title=a.title,
             text=a.text,
             excerpt=a.summary,
-            publish_time=str(a.publish_date) if a.publish_date else (find_date(a.html) or None),
+            publish_time=str(publish_time),
             modified_time=a.meta_data["post"].get("modified_time"),
             top_image=top_image,
             images=images,
@@ -143,6 +151,12 @@ class PostCrawlerMixin(LoggingMixin):
         self.log_info(f'{OK:<{PADDING}}' 
                       f'parsing {type} post {post["short_link"]}')
         return post
+
+    def parse_post_time(self, a: Article, coerce=False) -> str or datetime.datetime:
+        post_time = str(a.publish_date) if a.publish_date else (find_date(a.html) or None)
+        if coerce:
+            post_time = mk_datetime(post_time)
+        return post_time
 
     def parse_post_images(self, response, article3k):
         """
@@ -188,7 +202,6 @@ class PostCrawlerMixin(LoggingMixin):
             days_from=_days_from, days_to=_days_to, days=_days)
 
         return dict(filter_dates=filter_dates, language=language)
-
 
     @property
     def country(self):

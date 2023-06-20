@@ -74,6 +74,8 @@ class DatabaseSpiderLoader(LoggingMixin, SpiderLoader):
         self._check_name_duplicates()
 
     def _load_contexts(self) -> Iterable[PostCrawlerContext]:
+        """ Loads contexts from the database required
+        to construct spiders classes dynamically. """
         try:
             db_collection = Collection(
                 self.settings['CRAWL_DB_SPIDERS'],
@@ -87,3 +89,4 @@ class DatabaseSpiderLoader(LoggingMixin, SpiderLoader):
                 f'from database collection {db_collection.name} @ {db_collection.db.name} '
                 f'for spider of type `BasePostCrawler` ', str(e)
             )
+            raise

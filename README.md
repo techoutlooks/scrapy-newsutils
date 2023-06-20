@@ -21,7 +21,7 @@ Cf. example multistage `Dockerfile` in the `leeram-news/newsbot` project.
 * Throttled e-zines API requests rate at thesportsdb.com
   Configurable through env vars.
 
-* [TODO] Don't process image for obsolete post
+* [OK] Don't process image for obsolete post (outside days_from/days_to bounds)
 
 * [TODO] Skip NLP inference, ie. quit generating a metapost if exists a metapost with the same version in the db
   ie. iff same siblings detected.
@@ -47,6 +47,7 @@ Cf. example multistage `Dockerfile` in the `leeram-news/newsbot` project.
 
 ### Feature request
 
+* One XPath selector per `PostCrawlerMixin.post_type` instead of unique selector for all types.
 * Bypass scraper blocking
 
   Refs: [1](https://scrapfly.io/blog/web-scraping-with-scrapy/)

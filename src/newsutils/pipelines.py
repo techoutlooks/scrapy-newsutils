@@ -56,9 +56,6 @@ class FilterDate(BasePostPipeline):
                 })
             raise DropItem("expired post")
         else:
-            assert any([self.post[PUBLISH_TIME] != d
-                        for d in ['2022-04-09', '2022-04-10']]),\
-                'found 2022-04-09'
             return self.post
 
 

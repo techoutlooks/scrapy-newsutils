@@ -1,6 +1,8 @@
 # Dev dependencies
 
--e .
+
 -e file:///home/ceduth/Devl/Libs/newsnlp
 -e file:///home/ceduth/Devl/Libs/daily-query
+#-e .
+
 pytest
