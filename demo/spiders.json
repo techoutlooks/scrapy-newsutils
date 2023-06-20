@@ -5,10 +5,15 @@
     "start_urls": ["https://www.africaguinee.com/"],
     "country_code": "GN",
     "language": "fr",
-    "post_images": ".//*[contains(concat(\" \",normalize-space(@class),\" \"),\" img-article-details \")]//@src",
-    "post_texts": {
-        "featured": ".//*[contains(concat(\" \",normalize-space(@class),\" \"),\" post-slider-link \")]",
-        "default": ".//*[contains(concat(\" \",normalize-space(@class),\" \"),\" post-link \")]"
+    "rule_sets": {
+        "featured": {
+          "text": ".//*[contains(concat(\" \",normalize-space(@class),\" \"),\" post-slider-link \")]",
+          "images": ".//*[contains(concat(\" \",normalize-space(@class),\" \"),\" img-article-details \")]//@src"
+        },
+        "default": {
+          "text": ".//*[contains(concat(\" \",normalize-space(@class),\" \"),\" post-link \")]",
+          "images": ".//*[contains(concat(\" \",normalize-space(@class),\" \"),\" img-article-details \")]//@src"
+        }
     }
   },
   {
@@ -17,10 +22,15 @@
     "start_urls": ["https://guineematin.com/"],
     "country_code": "GN",
     "language": "fr",
-    "post_images": "//figure/img/@src",
-    "post_texts": {
-        "featured": ".//*[@id=\"tdi_75\"]//a",
-        "default": ".//*[contains(concat(\" \",normalize-space(@class),\" \"),\" tdi_127 \")]//a\n"
+    "rule_sets": {
+        "featured": {
+          "text": ".//*[@id=\"tdi_75\"]//a",
+          "images": "//figure/img/@src"
+        },
+        "default": {
+          "text": ".//*[contains(concat(\" \",normalize-space(@class),\" \"),\" tdi_127 \")]//a",
+          "images": "//figure/img/@src"
+        }
     }
   },
   {
@@ -33,10 +43,15 @@
     ],
     "country_code": "SN",
     "language": "fr",
-    "post_images": "//figure/img/@src",
-    "post_texts": {
-      "featured": ".//*[contains(concat(\" \",normalize-space(@class),\" \"),\" contentInsets \")]//div//a",
-      "default": "//*[(@id = \"appendable\")]//a"
+    "rule_sets": {
+      "featured": {
+        "text": ".//*[contains(concat(\" \",normalize-space(@class),\" \"),\" contentInsets \")]//div//a",
+        "images": "//figure/img/@src"
+      },
+      "default": {
+        "text": "//*[(@id = \"appendable\")]//a",
+        "images": "//figure/img/@src"
+      }
     }
   }
 ]

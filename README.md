@@ -96,7 +96,7 @@ class GnGuineeMatin(BasePostCrawler):
     country_code = 'GN'
     language = 'fr'
     post_images = "//figure/img/@src"
-    post_texts = {
+    rule_sets = {
         "featured": '//*[(@id = "tdi_82")]//a | //*[(@id = "tdi_84")]//a',
         "default": '//*[contains(concat( " ", @class, " " ), concat( " ", "td-animation-stack", " " ))]//a',
     }
@@ -120,7 +120,7 @@ cf. `settings.CRAWL_DB_URI`. Eg., run following and import generated `spiders.js
         "country_code": "GN",
         "language": "fr",
         "post_images": "//figure/img/@src",
-        "post_texts": {
+        "rule_sets": {
             "featured": "//*[(@id = \"tdi_82\")]//a | //*[(@id = \"tdi_84\")]//a",
             "default": "//*[contains(concat( \" \", @class, \" \" ), concat( \" \", \"td-animation-stack\", \" \" ))]//a"
         }
@@ -138,6 +138,6 @@ cf. `settings.CRAWL_DB_URI`. Eg., run following and import generated `spiders.js
 ## FIXES
 
 1. ezine APIs: custom throttling setting in `newsutils/ezines/thesportsdb.py`
-
-
+2. spiderloader: validate spider context loaded from db['_spiders'] (save first as yaml field)
+3. spider stats -> db['_spiders']
 

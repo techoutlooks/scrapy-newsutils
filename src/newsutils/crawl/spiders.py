@@ -42,28 +42,37 @@ FEATURED_POST = "featured"
 
 class PostCrawlerMeta(abc.ABCMeta):
     """
-    Sets crawl rules dynamically based on the `.post_texts` classproperty.
+    Sets crawl rules dynamically based on the `.rule_sets` classproperty.
     https://realpython.com/python-metaclasses/
     https://www.geeksforgeeks.org/__new__-in-python/
     """
 
     def __new__(cls, *args, **kwargs):
         crawler = super().__new__(cls, *args, **kwargs)
+        cls.validate_rule_sets(cls, crawler)
+
         # dynamic crawl_all rules:
         # hooking `.from_crawler()`, so that crawl's Spider._set_crawler() gets a
         # chance to initialise `.settings` and connect the `spider_closed` signal
         # https://stackoverflow.com/a/27514672, https://stackoverflow.com/a/25352434
-
         crawler.rules = [
             Rule(LinkExtractor(restrict_xpaths=[xpath]),
                  callback='parse_post',
-                 cb_kwargs={TYPE: key},
+                 cb_kwargs={TYPE: post_type, 'rules': rules},
                  follow=False)
-            for (key, xpath) in crawler.post_texts.items()
-            if crawler.post_texts[key]
+            # rules -> Mapping['text'|'images', XPath] of both text and images
+            for post_type, rules in crawler.rule_sets.items()
+            for (mimetype, xpath) in (rules or {}).items()
         ]
         return crawler
 
+    def validate_rule_sets(cls, crawler):
+        pass
+
+        # TODO: yaml validation (TODO: first, store spider context as yaml field)
+        assert crawler.rule_sets and filter(None, crawler.rule_sets.values()), \
+            "`rule_sets` must be a mapping of post_type (eg. 'default', 'featured'), " \
+            "with values resp. Mapping['text'|'images', XPath]"
 
 class PostCrawlerMixin(LoggingMixin):
     """
@@ -87,19 +96,20 @@ class PostCrawlerMixin(LoggingMixin):
     days_to: str = None              # crawl_all posts published at most  `days_to`;  today if None.
     days: [str] = []                   # single dates
 
-    # scrap posts only from pages links extracted by below xpath strings.
-    # eg. 'default', 'featured': are XPath lookup strings for resp. the regular, and featured posts types.
+    # Define extraction rules as xpath strings, that yield links to extract text and images from.
+    # By default, we define below two extraction rules called 'default', 'featured'
+    # suitable for common use-cases, to lookup resp. regular, and featured posts.
     # https://devhints.io/xpath
-    post_texts: Mapping[str, str] = {
+    rule_sets: Mapping[str, Mapping[str, str]] = {
         FEATURED_POST: None,
         DEFAULT_POST: None,
     }
 
-    # extract images for scraped post
-    post_images: str = None
-
-
-    def parse_post(self, response, type: str) -> Post:
+    def parse_post(self, response, type, rules) -> Post:
+        """
+        :param str type: post type
+        :param Mapping[str, str] rules: rules for extraction of both text and images urls.
+        """
 
         a = Article(response.url, config=config)
         a.download()
@@ -112,13 +122,17 @@ class PostCrawlerMixin(LoggingMixin):
 
         short_link = a.url.replace(a.source_url, '')
 
-        # don't attempt parsing images that'd eventually be dropped
-        # by the `FilterDate` pipeline
+        # quit processing posts that'll eventually get dropped by pipelines
+        # cf. `newsutils.pipelines.FilterDate`
         publish_time = self.parse_post_time(a, coerce=True)
-        if publish_time.date() in self.filter_dates:
-            images, top_image = self.parse_post_images(response, a)
+        if publish_time.date() not in self.filter_dates:
+            self.log_info(f'{OK:<{PADDING}}' 
+                          f'skipping expired {type} article {short_link}: '
+                          f'published {publish_time}, valid: {", ".join(map(str, self.filter_dates))}')
+            return None
 
-        self.log_info(f"{OK:<{PADDING}}" 
+        images, top_image = self.parse_post_images(response, a, rules['images'])
+        self.log_info(f"{OK if len(images) else FAILED:<{PADDING}}"
                       f"parsing (%d/%d) image(s) for post {short_link}"
                       % (len(images), len(list(a.images))))
 
@@ -158,7 +172,7 @@ class PostCrawlerMixin(LoggingMixin):
             post_time = mk_datetime(post_time)
         return post_time
 
-    def parse_post_images(self, response, article3k):
+    def parse_post_images(self, response, a: Article, xpath: str):
         """
         Improved images url parsing vs `newspaper` module
         Not all images intermeddled with a post content (eg. interstitial ads)
@@ -168,15 +182,15 @@ class PostCrawlerMixin(LoggingMixin):
             might be later deleted by the `DropLowQualityImages`
         """
         images = []
-        if self.post_images:
+        if xpath:
             try:
-                images = response.xpath(self.post_images).extract()
+                images = response.xpath(xpath).extract()
             except ValueError as e:
-                self.log_info(f'{FAILED:<{PADDING}}{self.post_images}')
+                self.log_info(f'{FAILED:<{PADDING}}{xpath}')
                 self.log_debug(str(e))
 
-        images = images or list(article3k.images)
-        top_image = images[0] if images else article3k.top_image
+        images = images or list(a.images)
+        top_image = images[0] if images else a.top_image
         return images, top_image
 
     def get_post_context(self, *args, days={}, **kwargs):
@@ -187,7 +201,7 @@ class PostCrawlerMixin(LoggingMixin):
 
         # required fields
         assert self.country_code, "`country_code` (ISO 3166-1) field required"
-        assert self.post_texts, "`post_texts` field required"
+        assert self.rule_sets, "`rule_sets` field required"
 
         # clean user input, set defaults
         # cmdline args (kwargs) have priority over class attributes!
@@ -263,11 +277,12 @@ class BasePostCrawler(PostCrawlerMixin, CrawlSpider, metaclass=PostCrawlerMeta):
 
         return logo
 
-    def parse_post(self, response, type) -> Post:
+    def parse_post(self, response, type, rules) -> Post:
         """ Override. Links newspaper with post. """
 
-        post = super().parse_post(response, type)
-        post["paper"] = self.get_paper(response)
+        post = super().parse_post(response, type, rules)
+        if post:
+            post["paper"] = self.get_paper(response)
         return post
 
 
@@ -284,7 +299,7 @@ class PostCrawlerContextMeta(ItemMeta):
             # Scrapy-defined attributes
             'name', 'start_urls', 'allowed_domains',
             # custom attributes
-            'country_code', 'language', 'post_texts', 'post_images',
+            'country_code', 'language', 'rule_sets',
             'days_from', 'days_to', 'days'
         )
         new_attrs = {f: scrapy.Field() for f in (*computed, *fields)}

@@ -14,10 +14,15 @@ class GnGuineeMatin(BasePostCrawler):
     # by `newsutils.scrapy.base.spiders.NewsSpider`
     country_code = 'GN'
     language = 'fr'
-    post_images = "//figure/img/@src"
-    post_texts = {
-        "featured": '//*[(@id = "tdi_82")]//a | //*[(@id = "tdi_84")]//a',
-        "default": '//*[contains(concat( " ", @class, " " ), concat( " ", "td-animation-stack", " " ))]//a',
+    rule_sets = {
+        "featured": {
+            "text": ".//*[@id=\"tdi_75\"]//a",
+            "images": "//figure/img/@src"
+        },
+        "default": {
+            "text": ".//*[contains(concat(\" \",normalize-space(@class),\" \"),\" tdi_127 \")]//a",
+            "images": "//figure/img/@src"
+        },
     }
 
     # crawl only specific dates

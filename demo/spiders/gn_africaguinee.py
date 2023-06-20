@@ -16,9 +16,15 @@ class GnAfricaGuinee(BasePostCrawler):
     country_code = 'GN'
     language = 'fr'
     post_images = "//figure/img/@src"
-    post_texts = {
-        "featured": '//*[contains(concat( " ", @class, " " ), concat( " ", "views_slideshow_pager_field_item", " " ))]//a',
-        "default": '//*/div/div/div/div/div/h3//a',
+    rule_sets = {
+        "featured": {
+            "text": ".//*[contains(concat(\" \",normalize-space(@class),\" \"),\" post-slider-link \")]",
+            "images": ".//*[contains(concat(\" \",normalize-space(@class),\" \"),\" img-article-details \")]//@src"
+        },
+        "default": {
+            "text": ".//*[contains(concat(\" \",normalize-space(@class),\" \"),\" post-link \")]",
+            "images": ".//*[contains(concat(\" \",normalize-space(@class),\" \"),\" img-article-details \")]//@src"
+        },
     }
 
     # days_from = '2022-04-19'
