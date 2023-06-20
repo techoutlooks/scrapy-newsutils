@@ -5,13 +5,13 @@
     "start_urls": ["https://www.africaguinee.com/"],
     "country_code": "GN",
     "language": "fr",
-    "post_images": "//figure/img/@src",
+    "post_images": ".//*[contains(concat(\" \",normalize-space(@class),\" \"),\" img-article-details \")]//@src",
     "post_texts": {
-        "featured": "//*[contains(concat( \" \", @class, \" \" ), concat( \" \", \"views_slideshow_pager_field_item\", \" \" ))]//a",
-        "default": "//*/div/div/div/div/div/h3//a"
+        "featured": ".//*[contains(concat(\" \",normalize-space(@class),\" \"),\" post-slider-link \")]",
+        "default": ".//*[contains(concat(\" \",normalize-space(@class),\" \"),\" post-link \")]"
     }
   },
-    {
+  {
     "name": "gn-guineematin ",
     "allowed_domains": ["guineematin.com"],
     "start_urls": ["https://guineematin.com/"],
@@ -19,8 +19,24 @@
     "language": "fr",
     "post_images": "//figure/img/@src",
     "post_texts": {
-        "featured": "//*[(@id = \"tdi_82\")]//a | //*[(@id = \"tdi_84\")]//a",
-        "default": "//*[contains(concat( \" \", @class, \" \" ), concat( \" \", \"td-animation-stack\", \" \" ))]//a"
+        "featured": ".//*[@id=\"tdi_75\"]//a",
+        "default": ".//*[contains(concat(\" \",normalize-space(@class),\" \"),\" tdi_127 \")]//a\n"
+    }
+  },
+  {
+    "name": "sn-igfm ",
+    "allowed_domains": [
+      "igfm.sn"
+    ],
+    "start_urls": [
+      "https://igfm.sn/"
+    ],
+    "country_code": "SN",
+    "language": "fr",
+    "post_images": "//figure/img/@src",
+    "post_texts": {
+      "featured": ".//*[contains(concat(\" \",normalize-space(@class),\" \"),\" contentInsets \")]//div//a",
+      "default": "//*[(@id = \"appendable\")]//a"
     }
   }
 ]

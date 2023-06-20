@@ -71,3 +71,5 @@ class TaskTypes(enum.Enum):
     NLP = "nlp"             # eg. scrapy nlp [similarity|summary|metapost] ...
 
 
+USER_AGENT = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10.15; rv:78.0) Gecko/20100101 Firefox/78.0'
+

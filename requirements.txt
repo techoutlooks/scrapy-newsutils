@@ -1,6 +1,6 @@
 # Dev dependencies
 
--e file:///home/ceduth/Devl/Libs/newsnlp
--e file:///home/ceduth/Devl/Libs/scrapy-newsutils
 -e .
+-e file:///home/ceduth/Devl/Libs/newsnlp
+-e file:///home/ceduth/Devl/Libs/daily-query
 pytest

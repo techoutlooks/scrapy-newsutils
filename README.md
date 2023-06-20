@@ -21,6 +21,7 @@ Cf. example multistage `Dockerfile` in the `leeram-news/newsbot` project.
 * Throttled e-zines API requests rate at thesportsdb.com
   Configurable through env vars.
 
+* [TODO] Don't process image for obsolete post
 
 * [TODO] Skip NLP inference, ie. quit generating a metapost if exists a metapost with the same version in the db
   ie. iff same siblings detected.
@@ -28,13 +29,14 @@ Cf. example multistage `Dockerfile` in the `leeram-news/newsbot` project.
 * [TODO] Create a single source of through for settings: settings.py, envs loaded by the run.py script
   eg. SIMILARITY_RELATED_THRESHOLD, etc.
 
-
 * [TODO] [NER as middleware](https://github.com/vu3jej/scrapy-corenlp) -> new post field
 
-* [TODO] [Scrapy DeltaFetch](https://github.com/ScrapeOps/python-scrapy-playbook/tree/master/2_Scrapy_Guides) ensures that your scrapers only ever crawl the content once
+* [TODO] Don't dupe-download ! Following options:
+  [Scrapy DeltaFetch](https://github.com/ScrapeOps/python-scrapy-playbook/tree/master/2_Scrapy_Guides) ensures that your scrapers only ever crawl the content once
+  [Python Memoization](https://joblib.readthedocs.io/en/stable/)
 
 * [TODO] Bulk (batch) Insert to Database
-  append to some bucket during `process_item()`. to only flush to db during pieline's `close_spider()`
+  append to some bucket during `process_item()`. to only flush to db during pipeline's `close_spider()`
   https://jerrynsh.com/5-useful-tips-while-working-with-python-scrapy/
 
 * [TODO] Move code for fetching post's `.images`, `.top_image` to Pipeline/Middleware
@@ -59,7 +61,9 @@ Cf. example multistage `Dockerfile` in the `leeram-news/newsbot` project.
     - [scrapy-playwright](https://pypi.org/project/scrapy-playwright/)
     - JS support via (Splash)[https://splash.readthedocs.io/en/stable/faq.html]  \
       Won't do: seem to require running in docker container??
+
 * Migrate to Distributed scraping, eg. [Frontera](https://github.com/scrapinghub/frontera) 
+
 
 
 ## Demo 
@@ -129,6 +133,10 @@ cf. `settings.CRAWL_DB_URI`. Eg., run following and import generated `spiders.js
     # redirects output to json file
     scrapy crawl gn-guineematin -O gn-guineematin.json
     ```
+
+## FIXES
+
+1. ezine APIs: custom throttling setting in `newsutils/ezines/thesportsdb.py`
 
 
 

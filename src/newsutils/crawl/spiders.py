@@ -4,7 +4,7 @@ from typing import Mapping
 import nltk
 import pycountry
 import scrapy
-from lxml.etree import XPath
+from htmldate import find_date
 from scrapy.item import ItemMeta
 
 from newsutils.logging import LoggingMixin, FAILED, OK, PADDING
@@ -14,11 +14,11 @@ from daily_query.helpers import parse_dates
 from scrapy.spiders import Rule, CrawlSpider
 from scrapy.linkextractors import LinkExtractor
 
-from newspaper import Article, build
+from newspaper import Article, Config, build
 
 from .items import Author, Paper
 from newsutils.conf.post_item import Post, mk_post
-from newsutils.conf import TYPE, get_setting
+from newsutils.conf import TYPE, get_setting, USER_AGENT
 
 nltk.download('punkt')
 
@@ -27,6 +27,11 @@ __all__ = [
     "PostCrawlerMeta", "PostCrawlerMixin", "BasePostCrawler", "PostCrawlerContext",
     "DEFAULT_POST", "FEATURED_POST"
 ]
+
+
+config = Config()
+config.browser_user_agent = USER_AGENT
+config.request_timeout = 10
 
 
 # default post types
@@ -94,7 +99,7 @@ class PostCrawlerMixin(LoggingMixin):
 
     def parse_post(self, response, type: str) -> Post:
 
-        a = Article(response.url)
+        a = Article(response.url, config=config)
         a.download()
         a.parse()
 
@@ -117,7 +122,7 @@ class PostCrawlerMixin(LoggingMixin):
             title=a.title,
             text=a.text,
             excerpt=a.summary,
-            publish_time=str(a.publish_date) if a.publish_date else None,
+            publish_time=str(a.publish_date) if a.publish_date else (find_date(a.html) or None),
             modified_time=a.meta_data["post"].get("modified_time"),
             top_image=top_image,
             images=images,
