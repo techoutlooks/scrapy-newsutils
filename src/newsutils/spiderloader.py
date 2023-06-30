@@ -75,13 +75,17 @@ class DatabaseSpiderLoader(LoggingMixin, SpiderLoader):
 
     def _load_contexts(self) -> Iterable[PostCrawlerContext]:
         """ Loads contexts from the database required
-        to construct spiders classes dynamically. """
+        to construct spiders classes dynamically.
+
+        Set `.version` field to integer `0` to disable a spider,
+        otherwise loads latest version of any spider.
+        """
         try:
             db_collection = Collection(
                 self.settings['CRAWL_DB_SPIDERS'],
                 db_or_uri=self.settings["CRAWL_DB_URI"]
             )
-            for ctx in db_collection.find():
+            for ctx in db_collection.find({'version': {'$nin': [0]}}).sort('version', -1):
                 yield PostCrawlerContext(ctx)
         except Exception as e:
             self.log_error(

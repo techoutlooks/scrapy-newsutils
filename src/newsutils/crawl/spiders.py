@@ -267,13 +267,14 @@ class BasePostCrawler(PostCrawlerMixin, CrawlSpider, metaclass=PostCrawlerMeta):
     def parse_logo(self, response) -> str:
         """ Returns the newspaper's logo url. """
 
-        imgs = parse_logo(response)["img_url_list"]
-        logo, status = (imgs[0], OK) if imgs \
-            else (None, FAILED)
+        for name in ['logo', self.source.brand]:
+            imgs = parse_logo(response, name)["img_url_list"]
+            if imgs:
+                break
 
-        self.log_info(f"{status:<{PADDING}}" 
-                      f"parsing site logo (out of {len(imgs)} images)")
-        self.log_debug(str(logo))
+        logo, status = (imgs[0], OK) if imgs else (None, FAILED)
+        self.log_debug(f"{status:<{PADDING}} parsing logo for brand '{self.source.brand}' "
+                       f"(out of {len(imgs)} images): {str(logo)}")
 
         return logo
 
@@ -296,6 +297,8 @@ class PostCrawlerContextMeta(ItemMeta):
 
         computed = (get_setting('DB_ID_FIELD'), )
         fields = (
+            # meta-fields
+            'version',
             # Scrapy-defined attributes
             'name', 'start_urls', 'allowed_domains',
             # custom attributes

@@ -1,14 +1,16 @@
 import os
-from urllib.parse import urlparse
+from urllib.parse import urljoin
 
 
-def parse_logo(response):
+def parse_logo(response, name='logo'):
     """
     Parse logo url from response.
+    Matches substring `name` in @src, @class, @title or @alt attributes
+    of <a>, <img>.
     """
 
     def clean_url(url):
-        return urlparse(url).geturl()
+        return urljoin(response.url, url)
 
     # List possible logo extensions
     ext_list = [".png", ".gif", ".jpg", ".tif", ".tiff", ".bmp", ".svg"]
@@ -32,7 +34,7 @@ def parse_logo(response):
         for tag_img in tag_a.xpath('.//img'):
             img_url = str(tag_img.xpath('@src').get())
             img_url = clean_url(img_url)
-            ind = img_url.find('logo')
+            ind = img_url.find(name)
             if ind > 0:
                 found = True
                 img_url_list.append(img_url)
@@ -45,7 +47,7 @@ def parse_logo(response):
             for tag_img in tag_div.xpath('.//img'):
                 img_url = str(tag_img.xpath('@src').get())
                 img_url = clean_url(img_url)
-                ind = img_url.find('logo')
+                ind = img_url.find(name)
                 if ind > 0:
                     found = True
                     img_url_list.append(img_url)
@@ -69,8 +71,8 @@ def parse_logo(response):
                     title = str(tag_img.xpath('@title').get()).lower().strip()
                     alt = str(tag_img.xpath('@alt').get()).lower().strip()
 
-                    if img_ext in ext_list or tag_class.find("logo") > 0 or title.find("logo") > 0 or \
-                            alt.find("logo") > 0:
+                    if img_ext in ext_list or tag_class.find(name) > 0 or title.find(name) > 0 or \
+                            alt.find(name) > 0:
                         found = True
                         img_url_list.append(img_url)
                         url_list.append(str_url)
