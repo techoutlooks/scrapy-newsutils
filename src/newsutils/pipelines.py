@@ -9,8 +9,50 @@ from imquality import brisque
 from itemadapter import ItemAdapter
 from scrapy.exceptions import DropItem
 
+from newsutils.conf.post_item import Post
 from newsutils.crawl import BasePostPipeline
 from newsutils.conf import VERSION, SHORT_LINK, PUBLISH_TIME, IMAGES
+
+
+__all__ = (
+    "posts_similarity", "have_changed",
+    "SaveToDb", "FilterDate", "SaveToDb", "DropLowQualityImages"
+)
+
+
+def posts_similarity(src: Post, other: Post):
+    """
+    Heuristic to quickly compute post similarity without NLP.
+    Computed as the Jacquard distance of respective keywords sets.
+    """
+    assert src and other, \
+        "Jaccard similarity not well-defined: `src` or `other` must exist"
+
+    kw1, kw2 = set(src['keywords']), set(other['keywords'])
+    return len(kw1.intersection(kw2)) / len(kw1.union(kw2))
+
+
+def have_changed(src: Post, other, fields, excluded=None, threshold=0):
+    """
+    Whether item pipeline significantly differ from its database version
+    :param Post src: post item from pipeline
+    :param Post other: post item from database
+    :param [str] fields: fields to check
+    :param [str] excluded: fields to exclude
+    :param int or bool threshold: whether to enforce loose comparison (based on Jaccard index)
+        is similarity threshold below which items are considered dissimilar (have changed).
+    """
+    if excluded is None:
+        excluded = []
+
+    def has_changed(val, db_val):
+        if isinstance(val, (list, tuple)):
+            return set(val) != set(db_val) if not threshold else \
+                posts_similarity(src, other) < threshold
+        return val != db_val
+
+    return any([has_changed(src[f], other[f])
+                for f in fields if f not in excluded])
 
 
 class SaveToDb(BasePostPipeline):
@@ -101,9 +143,11 @@ class CheckEdits(BasePostPipeline):
                 raise DropItem("duplicate post")
 
             if status['new_version']:
-                # content was altered in a major way, suggests new version of post
-                # increment post version, also return post without id for new post
-                # creation by the `SaveToDb` pipeline
+                # content was altered in a major way, suggesting that the pipeline item is new version
+                # of an existing db post. increment post version, also return post item without db _id,
+                # st. triggers a new post creation (with incremented version) by the `SaveToDb` pipeline.
+                # IMPORTANT: saving as int st subsequent tasks can pick up last (max) version of db doc
+                # using a request similar to `db.<COLLECTION>.find({type: 'featured'}).sort({version:-1})`
                 adapter[version_field] = int(existing_post[version_field]) + 1
             else:
                 # otherwise, consider the update minor, and update existing post
@@ -114,13 +158,11 @@ class CheckEdits(BasePostPipeline):
         # will probably get saved to db.
         return adapter.item
 
-    def check_edits(self, updated_fields=None):
+    def check_edits(self):
         """
         Detect post changes.
         Enforcing action to take against changes is left to caller.
 
-        :param updated_fields: changes in `fields` will trigger a new version of the
-            current post to be created. defaults to content fields alone.
         :return: (existing_post, status)
             status: **pristine**, post is identical to existing one
                     **new_version**, post is new version of existing post
@@ -130,17 +172,15 @@ class CheckEdits(BasePostPipeline):
         status = dict(pristine=True, new_version=False)
 
         all_fields = list(self.post.fields)
-        excluded_fields = self.edits_excluded_fields
         new_version_fields = self.edits_new_version_fields
         existing_post = self.day.find_one({self.item_id_field: self.post[self.item_id_field]})
 
-        have_changed = lambda fields: any(
-            [self.post[f] != existing_post[f] for f in fields
-             if f not in excluded_fields])
+        _have_changed = lambda *a, **kw: have_changed(
+            self.post, existing_post, *a, **kw)
 
         if existing_post:
-            status['pristine'] = not have_changed(all_fields)
-            status['new_version'] = have_changed(new_version_fields)
+            status['pristine'] = not _have_changed(all_fields, excluded=self.edits_excluded_fields, threshold=.8)
+            status['new_version'] = _have_changed(new_version_fields, threshold=.7)
 
         return existing_post, status
 

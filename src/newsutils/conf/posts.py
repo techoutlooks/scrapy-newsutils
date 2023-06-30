@@ -114,6 +114,11 @@ class Posts(AppSettings):
         # POST
         # =============================================================================================
         # per-post editable/computed fields values.
+        #
+        # `item_id_field` must NOT be set to the `db_id_field`,
+        #       eg. CheckEdits pipeline which relies on `item_id_field` to find an existing version
+        #       of a post in the database, given that pipeline items have by definition no value for
+        #       `db_id_field` (didn't hit the db yet).
 
         "auto_publish": True,
         "item_id_field": SHORT_LINK,
@@ -124,6 +129,7 @@ class Posts(AppSettings):
         # section defines inputs for decision making by NLP tasks (see `nlp` module).
         # cf. `newsutils.crawl.get_strategies()`, yields decision  based on below inputs
         # **tasks** : `similarity`, `summary`, `metapost` generation.
+        #
         # nlp_uses_meta: also add metaposts (type==METAPOST) as inputs to NLP tasks?
         # summary_uses_nlp: (iff !metapost type), use text from `excerpt` field instead of `text` field?
         # meta_uses_nlp: metapost generation: use text from `caption` field instead of `title` field?
@@ -153,7 +159,7 @@ class Posts(AppSettings):
         "image_min_size": (300, 200),
         "image_brisque_max_score": get_env('image_brisque_max_score', 50),
         "image_brisque_ignore_exception": True,
-        "edits_new_version_fields": (TEXT, TITLE),
+        "edits_new_version_fields": (TITLE, KEYWORDS),
 
         # COMMANDS
         # =============================================================================================

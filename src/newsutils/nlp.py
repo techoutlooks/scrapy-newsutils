@@ -296,7 +296,8 @@ class DayNlp(Day, PostConfigMixin):
         return metapost, lookup_version
 
     def mk_metapost_version(self, posts: Iterable[Post]) -> str:
-        """ Predictable version for metapost generated from posts """
+        """ Predictable version hash for metapost.
+        Generated from siblings posts' ObjectId's. """
         _posts = sorted(posts, key=lambda p: p[self.db_id_field].generation_time)
         return hashlib.md5(
             ''.join([str(p[self.db_id_field]) for p in _posts]).encode()

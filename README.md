@@ -67,7 +67,19 @@ Cf. example multistage `Dockerfile` in the `leeram-news/newsbot` project.
 
 
 
-## Demo 
+## Dev 
+
+### Requirements
+
+* running MongoDb instance (required by `newsbot`, `newsapi`)
+
+    ```shell
+    docker run -d -p 27017:27017 --name mongodb \
+      -v pgdata:/var/lib/postgresql/data \
+      mongo:latest
+    ```
+  
+### Demo
 
 * Setup python env 
 ```shell

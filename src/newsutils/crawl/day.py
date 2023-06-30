@@ -10,8 +10,7 @@ from ..helpers import compose, dotdict
 from ..conf.post_item import Post
 from ..conf.mixins import PostStrategyMixin
 from newsutils.conf import TaskTypes, \
-    SHORT_LINK, TYPE, UNKNOWN
-
+    SHORT_LINK, TYPE, UNKNOWN, VERSION
 
 __all__ = ['Day']
 
@@ -45,12 +44,13 @@ class Day(PostStrategyMixin, Collection):
     def get_posts(self, **match) -> Iterable[Post]:
         """ Get posts based on strategy.
         Posts are loaded from db `as-is`, ie. not expanding related fields!
+        Loads only last version of documents.
         """
         pipe = compose(
             lambda p: self.get_decision("filter_metapost")(p, self.task_type),
             lambda p: Post(p)
         )
-        posts = map(pipe, self.find(match=match))
+        posts = map(pipe, self.find(match=match).sort(VERSION, -1))
         posts = filter(None, posts)
         return posts
 
