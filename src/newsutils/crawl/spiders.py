@@ -74,6 +74,7 @@ class PostCrawlerMeta(abc.ABCMeta):
             "`rule_sets` must be a mapping of post_type (eg. 'default', 'featured'), " \
             "with values resp. Mapping['text'|'images', XPath]"
 
+
 class PostCrawlerMixin(LoggingMixin):
     """
     Post spider template.

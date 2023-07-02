@@ -179,8 +179,10 @@ class CheckEdits(BasePostPipeline):
             self.post, existing_post, *a, **kw)
 
         if existing_post:
-            status['pristine'] = not _have_changed(all_fields, excluded=self.edits_excluded_fields, threshold=.8)
-            status['new_version'] = _have_changed(new_version_fields, threshold=.7)
+            status['pristine'] = not _have_changed(
+                all_fields, excluded=self.edits_excluded_fields, threshold=self.edits_pristine_threshold)
+            status['new_version'] = _have_changed(
+                new_version_fields, threshold=self.edits_new_version_threshold)
 
         return existing_post, status
 

@@ -83,6 +83,10 @@ class PostConfigMixin(BaseConfigMixin):
     image_brisque_max_score = settings['POSTS']['image_brisque_max_score']
     image_brisque_ignore_exception = settings['POSTS']['image_brisque_ignore_exception']
 
+    edits_pristine_threshold = settings['POSTS']['edits_pristine_threshold']
+    edits_new_version_threshold = settings['POSTS']['edits_new_version_threshold']
+
+
     @property
     def similarity(self):
         """ Settings for computing similarity scores amongst posts

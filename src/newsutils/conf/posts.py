@@ -170,4 +170,8 @@ class Posts(AppSettings):
         "similarity_related_threshold": .2,
         "similarity_max_docs": 2,
 
+        # edits version pipeline (cf. CheckEdits)
+        "edits_pristine_threshold": .8,
+        "edits_new_version_threshold": .7
+
     }

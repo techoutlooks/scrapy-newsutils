@@ -50,7 +50,7 @@ class Day(PostStrategyMixin, Collection):
             lambda p: self.get_decision("filter_metapost")(p, self.task_type),
             lambda p: Post(p)
         )
-        posts = map(pipe, self.find(match=match).sort(VERSION, -1))
+        posts = map(pipe, self.find_max(VERSION, self.item_id_field, match))
         posts = filter(None, posts)
         return posts
 

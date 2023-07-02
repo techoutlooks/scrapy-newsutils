@@ -85,8 +85,11 @@ class DatabaseSpiderLoader(LoggingMixin, SpiderLoader):
                 self.settings['CRAWL_DB_SPIDERS'],
                 db_or_uri=self.settings["CRAWL_DB_URI"]
             )
-            for ctx in db_collection.find({'version': {'$nin': [0]}}).sort('version', -1):
+
+            for ctx in db_collection.find_max(
+                    'version', groupby='name', match={'version': {'$nin': [0]}}):
                 yield PostCrawlerContext(ctx)
+
         except Exception as e:
             self.log_error(
                 f'error loading initializer context '
