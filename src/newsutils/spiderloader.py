@@ -2,15 +2,56 @@ import inspect
 import traceback
 import warnings
 from typing import Iterable
+from urllib.parse import urlparse
 
-import scrapy
 from daily_query.mongo import Collection
 from itemadapter import ItemAdapter
 from scrapy.spiderloader import SpiderLoader
 
+from newsutils.conf import get_setting
 from newsutils.crawl import BasePostCrawler, PostCrawlerContext
 from newsutils.helpers import to_camel
 from newsutils.logging import LoggingMixin
+
+
+__all__ = (
+    "load_spider_contexts", "create_post_crawler_class", "iter_spider_classes",
+    "DatabaseSpiderLoader"
+)
+
+
+def load_spider_contexts(domain=None, **match):
+    """ Loads contexts from the database required
+    to construct spiders classes dynamically.
+
+    Set `.version` field to integer `0` to disable a spider,
+    otherwise loads latest version of any spider.
+
+    :param str domain: optional domain+tld to match against `start_urls`
+    :param dict match: AND filter query
+    """
+
+    logger = LoggingMixin()
+    logger._logger_name = __file__.rsplit("/", 1)[-1]
+
+    try:
+        db_col = Collection(
+            get_setting('CRAWL_DB_SPIDERS'),
+            db_or_uri=get_setting("CRAWL_DB_URI"))
+
+        for ctx in db_col.find_max('version', groupby='name', match={'version': {'$nin': [0]}}):
+            if (domain and not list(filter(lambda u: urlparse(u).netloc.endswith(domain), ctx['start_urls']))) \
+                    or (match and not all([v == ctx[k] for k, v in match.items()])):
+                continue
+            yield PostCrawlerContext(ctx)
+
+    except Exception as e:
+        logger.log_error(
+            f'error loading initializer context '
+            f'from database collection {db_col.name} @ {db_col.db.name} '
+            f'for spider of type `BasePostCrawler` ', str(e)
+        )
+        raise
 
 
 def create_post_crawler_class(ctx):
@@ -57,7 +98,7 @@ class DatabaseSpiderLoader(LoggingMixin, SpiderLoader):
 
         # loads spiders from the db
         try:
-            contexts = self._load_contexts()
+            contexts = load_spider_contexts()
             for spcls in iter_spider_classes(contexts):
                 self._found[spcls.name].append((spcls.__module__, spcls.__name__))
                 self._spiders[spcls.name] = spcls
@@ -72,28 +113,3 @@ class DatabaseSpiderLoader(LoggingMixin, SpiderLoader):
 
         # checks dupes across both modules and the db
         self._check_name_duplicates()
-
-    def _load_contexts(self) -> Iterable[PostCrawlerContext]:
-        """ Loads contexts from the database required
-        to construct spiders classes dynamically.
-
-        Set `.version` field to integer `0` to disable a spider,
-        otherwise loads latest version of any spider.
-        """
-        try:
-            db_collection = Collection(
-                self.settings['CRAWL_DB_SPIDERS'],
-                db_or_uri=self.settings["CRAWL_DB_URI"]
-            )
-
-            for ctx in db_collection.find_max(
-                    'version', groupby='name', match={'version': {'$nin': [0]}}):
-                yield PostCrawlerContext(ctx)
-
-        except Exception as e:
-            self.log_error(
-                f'error loading initializer context '
-                f'from database collection {db_collection.name} @ {db_collection.db.name} '
-                f'for spider of type `BasePostCrawler` ', str(e)
-            )
-            raise

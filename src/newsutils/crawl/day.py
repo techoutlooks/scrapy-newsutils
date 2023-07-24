@@ -1,4 +1,7 @@
+import hashlib
+import time
 from typing import Iterable
+from urllib.parse import urlparse
 
 from bson import ObjectId
 from itemadapter import ItemAdapter
@@ -10,7 +13,7 @@ from ..helpers import compose, dotdict
 from ..conf.post_item import Post
 from ..conf.mixins import PostStrategyMixin
 from newsutils.conf import TaskTypes, \
-    SHORT_LINK, TYPE, UNKNOWN, VERSION
+    LINK, SHORT_LINK, TYPE, UNKNOWN, VERSION, LINK_HASH
 
 __all__ = ['Day']
 
@@ -18,6 +21,7 @@ __all__ = ['Day']
 class Day(PostStrategyMixin, Collection):
     """
     Database management facility for daily post items.
+    Is aware of the post type eg. `metapost`, `featured`, `default`
     """
 
     posts: [Post] = []
@@ -46,10 +50,16 @@ class Day(PostStrategyMixin, Collection):
         Posts are loaded from db `as-is`, ie. not expanding related fields!
         Loads only last version of documents.
         """
+
+        # execute filters in reverse-order (last runs first)
+        # `filter_metapost()` - load only desired post types
+        # `get_post_text()`   - load only post with desired total texts length
         pipe = compose(
             lambda p: self.get_decision("filter_metapost")(p, self.task_type),
+            lambda p: p if self.get_decision("get_post_text")(p) else None,
             lambda p: Post(p)
         )
+
         posts = map(pipe, self.find_max(VERSION, self.item_id_field, match))
         posts = filter(None, posts)
         return posts
@@ -113,7 +123,15 @@ class Day(PostStrategyMixin, Collection):
         """
 
         def set_metapost_link(d: Doc):
-            d['link'] = self.get_decision('get_metapost_link')(d)
+            if Post(d).is_meta:
+
+                d[LINK] = self.get_decision('get_metapost_link')(d)
+                short_link = urlparse(d[LINK]).path
+                d[SHORT_LINK] = short_link
+
+                d[LINK_HASH] = '%s.%s' % ( # build link hash the same way as by newspaper3k lib
+                    hashlib.md5(short_link.encode('utf-8', 'replace')).hexdigest(), time.time())
+
             return d
 
         db_post, created = None, False

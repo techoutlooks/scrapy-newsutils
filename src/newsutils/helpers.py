@@ -12,10 +12,8 @@ from environs import Env
 env = Env()
 env.read_env()
 
-
 DATE_FORMAT = '%Y-%m-%d'
 DATETIME_FORMAT = f'{DATE_FORMAT} %H:%M:%S'
-
 
 # == [UTILS] ==
 
@@ -24,13 +22,11 @@ DATETIME_FORMAT = f'{DATE_FORMAT} %H:%M:%S'
 getdeepattr = lambda obj, path: \
     reduce(lambda v, k: getattr(v, k, None), path.split("."), obj)
 
-
 # like `.get("key")` method of dict, but supports dotted path as "key"
 # eg. getdeep(body, "error.error_user_msg")
 # don't raise if key not found but return {}, which evals to None ;)
 getdeep = lambda obj, path: \
     reduce(lambda v, k: v.get(k, {}), path.split("."), obj)
-
 
 hexoint = lambda hex: f"0x{str(hex)}"
 
@@ -41,19 +37,16 @@ hexoint = lambda hex: f"0x{str(hex)}"
 dictlist_factory = lambda op: lambda *dict_lists: reduce(
     lambda l1, l2: [dict(s) for s in
                     getattr({*[frozenset(d.items()) for d in l1]}, op)
-                        (frozenset(d.items()) for d in l2)],
+                    (frozenset(d.items()) for d in l2)],
     dict_lists
 )
 
-
 evalfn = lambda f: f()
-
 
 # difference and union of lists of dicts,
 # eg. dictdiff([d_11, d_12, ...], [d_21, d_22, ...], ...)
 dictdiff = dictlist_factory('difference')
 dictunion = dictlist_factory('union')
-
 
 # get unique dicts (flatten list) from list of dicts.
 # solves error: `{TypeError}unhashable type: 'dict'` yielded by
@@ -64,7 +57,6 @@ uniquedicts = lambda *dict_lists: reduce(lambda l1, l2: [
                       *[frozenset(d.items()) for d in l2]}
 ], dict_lists)
 
-
 # compose any number of functions in given order
 # usage: compose(fn1, fn2)(x)
 compose = lambda *fns: reduce(lambda f, g: lambda x: f(g(x)), fns)
@@ -72,7 +64,6 @@ compose = lambda *fns: reduce(lambda f, g: lambda x: f(g(x)), fns)
 # similar to JS's Array.prototype.flatMap()
 # https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Array/flatMap
 flatmap = lambda f, xs: (y for ys in xs for y in f(ys))
-
 
 # == [TEXT] ==
 
@@ -188,7 +179,6 @@ def import_module_custom(module):
     return module
 
 
-
 # == [DECORATORS] ==
 
 
@@ -206,4 +196,3 @@ class dotdict(dict):
     __getattr__ = dict.get
     __setattr__ = dict.__setitem__
     __delattr__ = dict.__delitem__
-

@@ -49,11 +49,11 @@
     "rule_sets": {
       "featured": {
         "text": ".//*[contains(concat(\" \",normalize-space(@class),\" \"),\" contentInsets \")]//div//a",
-        "images": "//figure/img/@src"
+        "images": "//*[contains(concat(\" \",normalize-space(@class),\" \"),\" label \")]/following-sibling::p/following-sibling::*[1]/self::p//img/@src"
       },
       "default": {
         "text": "//*[(@id = \"appendable\")]//a",
-        "images": "//figure/img/@src"
+        "images": "//*[contains(concat(\" \",normalize-space(@class),\" \"),\" label \")]/following-sibling::p/following-sibling::*[1]/self::p//img/@src"
       }
     }
   }

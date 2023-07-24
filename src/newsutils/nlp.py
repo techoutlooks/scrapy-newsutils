@@ -6,20 +6,68 @@ from urllib.parse import urlparse
 
 from daily_query.helpers import mk_datetime
 from newsnlp import TextSummarizer, TitleSummarizer, Categorizer, TfidfVectorizer
+from newsnlp.ad import extract_domain, extract_ad_candidates_from_url, AD_LABEL_COLUMN
+from newsnlp.ad.models.ad_detector import predict_ads
 
 from newsutils.conf import LINK, TaskTypes, SHORT_LINK, LINK_HASH
 from newsutils.conf.mixins import PostConfigMixin
 from newsutils.crawl import Day
-from newsutils.helpers import wordcount, uniquedicts, dictdiff, add_fullstop, import_attr
+from newsutils.helpers import wordcount, uniquedicts, dictdiff, add_fullstop, compose
 from newsutils.crawl.items import BOT, THIS_PAPER
 from newsutils.conf.post_item import Post, mk_post
 from newsutils.conf import \
     TITLE, METAPOST, SCORE, COUNTRY, TYPE, AUTHORS, PUBLISH_TIME, VERSION, \
-    MODIFIED_TIME, IMAGES, VIDEOS, TAGS, IS_DRAFT, IS_SCRAP, KEYWORDS, TOP_IMAGE, PAPER, UNKNOWN, \
-    get_setting
+    MODIFIED_TIME, IMAGES, VIDEOS, TAGS, IS_DRAFT, IS_SCRAP, KEYWORDS, TOP_IMAGE, PAPER, UNKNOWN
+from newsutils.spiderloader import load_spider_contexts
+
+
+__all__ = (
+    "CATEGORY_NOT_FOUND",
+    "predict_post_image_ads",
+    "DayNlp"
+)
 
 
 CATEGORY_NOT_FOUND = 'N/A'
+
+
+def predict_post_image_ads(post_url: str):
+    """
+    Performs ad detection per each post image, that analyses several dimensions like:
+    the geometrical images properties (width, height, size), image src, click destination,
+    as well the surrounding context of images (caption, alt).
+    """
+
+    # load spider context for url
+    domain = extract_domain(post_url)
+    spider_ctx = next(load_spider_contexts(domain=domain))
+    if not spider_ctx:
+        return []
+
+    # pipeline items to derive images xpaths from spider context,
+    # and extract ad candidate from resulting xpaths
+    clean_xpath = lambda x: x.strip('@src') if x.endswith('@src') else x
+    get_link_xpath = lambda x: f"{x}parent::a"
+    extract_ad_candidates_from_xpath = lambda x: extract_ad_candidates_from_url(post_url, x, raise_exc=False)
+    img_xpaths = set([v for rule in spider_ctx['rule_sets'].items()
+                for (k, v) in rule[1].items() if k == 'images'])
+
+    # execute pipeline to get data suitable for feeding the ad prediction model
+    # perform ad prediction inference
+    fetch_ad_candidates = compose(extract_ad_candidates_from_xpath, get_link_xpath, clean_xpath)
+    ad_candidates = sum([list(fetch_ad_candidates(x)) for x in img_xpaths], [])
+    return predict_ads(ad_candidates)
+
+
+def clean_post_images(post: Post):
+
+    ad_imgs_urls = map(lambda p: p['_raw']['img_url'],
+        filter(lambda p: pred[AD_LABEL_COLUMN], predict_post_image_ads(post[LINK]))
+    )
+
+    # comparing relative paths since `extract_ad_candidates_from_url()`
+    # might have returned relative img paths
+    post[IMAGES] = [u for u in post[IMAGES] if urlparse(u).path not in ad_imgs_urls]
 
 
 class DayNlp(Day, PostConfigMixin):
@@ -62,7 +110,7 @@ class DayNlp(Day, PostConfigMixin):
         )
 
         # nlp models
-        corpus = [self.get_decision("get_post_text")(p) for p in self.posts]
+        corpus = filter(None, [self.get_decision("get_post_text")(p) for p in self.posts])
         self.vectorizer = TfidfVectorizer(lang="fr")(corpus)
         self.categorizer = Categorizer(lang="fr")
         self.text_summarizer = TextSummarizer(lang=self.lang)
@@ -157,7 +205,11 @@ class DayNlp(Day, PostConfigMixin):
         :rtype: (Post, int)
          """
 
+        # don't attempt summarising if min text length requirement not met
         text = self.get_decision("get_post_text")(post)
+        if not text:
+            return post, 0
+
         summary, caption, categories = self.get_summary(text)
         category = categories[0][0] if categories else CATEGORY_NOT_FOUND
 
@@ -184,7 +236,7 @@ class DayNlp(Day, PostConfigMixin):
 
     def save_metapost(self, src: Post, **kwargs):
         """ Generate a meta post from given post's siblings,
-         and save it to the database in the metapost's collection. """
+         and save it to the database in the same collection. """
 
         metapost, saved = None, 0
         log_msg = \
@@ -213,9 +265,12 @@ class DayNlp(Day, PostConfigMixin):
 
         Nota:
         -----
-        (1) meta posts do NOT set following fields: TITLE, TEXT, EXCERPT.
-            Instead, summarization assigns following fields: 'caption', 'title', 'category'.
+        (1) mk_metapost do NOT set following fields: TITLE, TEXT, EXCERPT.
+            Instead, summarization assigns a new set of fields: 'caption', 'title', 'category'.
         (2) No `_id` field is generated from metaposts. This is left to the database engine.
+        (3) LINK, SHORT_LINK, LINK_HASH fields init is deferred to the
+            `Day.save(transform=...)` method,
+            since links include the `db_id_field` of posts, only available after hitting the db.
 
         CAUTION: relies on `.save_summary()` to set values for fields `siblings`, `related`
 
@@ -226,72 +281,68 @@ class DayNlp(Day, PostConfigMixin):
         :returns: saved (metapost, count).
         :rtype: Post
         """
+        metapost, lookup_version = None, None
 
         # TODO: leverage fact that similarity is a symmetric function to improve speed by x2.
         # TODO: strategy to get metapost from other methods than TF-IDF, eg. kNN, kernels?
-        metapost, lookup_version = None, None
         siblings = self.get_similar(src, from_field=self.siblings_field)
         siblings, _ = zip(*siblings) if siblings else ([], [])
         siblings_texts = [self.get_decision("get_post_text")(p, meta=True) for p in siblings]
-        _text = " ".join([add_fullstop(t) for t in siblings_texts])
+        _text = " ".join([add_fullstop(t) for t in filter(None, siblings_texts)])
 
-        # exists _text, means there were non-empty siblings
-        if _text:
-            metapost = mk_post()
+        # skip if no _text, ie., no siblings found to infer metaposts
+        if not _text:
+            return metapost, lookup_version
 
-            # `lookup_version`: possible existing database version of this metapost
-            # It corresponds to previous siblings of this post, ie. that were not added by the current process.
-            old_siblings = filter(lambda p: p[self.db_id_field].generation_time <= self.start_time, siblings)
-            lookup_version = self.mk_metapost_version(old_siblings)
+        metapost = mk_post()
 
-            # the current version
-            # ie. after `.save_similarity()` may have added more siblings to `src` post.
-            metapost[VERSION] = self.mk_metapost_version(siblings)
+        # `lookup_version`: possible existing database version of this metapost
+        # It corresponds to previous siblings of this post, ie. that were not added by the current process.
+        old_siblings = filter(lambda p: p[self.db_id_field].generation_time <= self.start_time, siblings)
+        lookup_version = self.mk_metapost_version(old_siblings)
 
-            # NLP fields. Models inference happen here.
-            summary, caption, categories = self.get_summary(_text)
-            category = categories[0][0] if categories else CATEGORY_NOT_FOUND
-            metapost[self.category_field] = category
-            metapost[self.caption_field] = caption
-            metapost[self.summary_field] = summary
+        # the current version
+        # ie. after `.save_similarity()` may have added more siblings to `src` post.
+        metapost[VERSION] = self.mk_metapost_version(siblings)
 
-            # siblings & related
-            # from src post
-            metapost[self.siblings_field] = src[self.siblings_field]
-            metapost[self.related_field] = src[self.related_field]
+        # NLP fields. Models inference happen here.
+        summary, caption, categories = self.get_summary(_text)
+        category = categories[0][0] if categories else CATEGORY_NOT_FOUND
+        metapost[self.category_field] = category
+        metapost[self.caption_field] = caption
+        metapost[self.summary_field] = summary
 
-            # immutable fields
-            # `TOP_IMAGE` from most similar post (highest score)
-            # `MODIFIED_TIME` is now
-            metapost[TYPE] = "%s.%s" % (METAPOST, src[TYPE])
-            metapost[COUNTRY] = src[COUNTRY]
-            metapost[PUBLISH_TIME] = str(mk_datetime(self))
-            metapost[MODIFIED_TIME] = str(mk_datetime())
-            metapost[TOP_IMAGE] = siblings[0][TOP_IMAGE]
-            metapost[PAPER] = THIS_PAPER
-            metapost[AUTHORS] = [BOT]
+        # siblings & related
+        # from src post
+        metapost[self.siblings_field] = src[self.siblings_field]
+        metapost[self.related_field] = src[self.related_field]
 
-            # compile misc. data from siblings into metapost:
-            # bool fields, str list fields, dict list fields
-            for post in siblings:
+        # immutable fields
+        # `TOP_IMAGE` from most similar post (highest score)
+        # `MODIFIED_TIME` is now
+        metapost[TYPE] = "%s.%s" % (METAPOST, src[TYPE])
+        metapost[COUNTRY] = src[COUNTRY]
+        metapost[PUBLISH_TIME] = str(mk_datetime(self))
+        metapost[MODIFIED_TIME] = str(mk_datetime())
+        metapost[TOP_IMAGE] = siblings[0][TOP_IMAGE]
+        metapost[PAPER] = THIS_PAPER
+        metapost[AUTHORS] = [BOT]
 
-                for f in IS_DRAFT, IS_SCRAP:  # bools
-                    metapost[f] &= post[f]
-                for f in IMAGES, VIDEOS, KEYWORDS, TAGS:  # strs
-                    metapost[f] = list(set(metapost[f]).union(post[f]))
-                for f in AUTHORS, :  # dicts
-                    metapost[f] = uniquedicts(metapost[f], post[f])
+        # compile misc. data from siblings into metapost:
+        # bool fields, str list fields, dict list fields
+        for post in siblings:
 
-            # generate metapost link from user-defined creator func if any
-            # default joins baseurl picked from the env and the metapost id
-            link = self.get_decision('get_metapost_link')(metapost)
-            short_link = urlparse(link).path
-            metapost[SHORT_LINK] = short_link
-            metapost[LINK] = link
+            for f in IS_DRAFT, IS_SCRAP:  # bools
+                metapost[f] &= post[f]
+            for f in IMAGES, VIDEOS, KEYWORDS, TAGS:  # strs
+                metapost[f] = list(set(metapost[f]).union(post[f]))
+            for f in AUTHORS, :  # dicts
+                metapost[f] = uniquedicts(metapost[f], post[f])
 
-            # link hash constructed in the same was as for regular posts by newspaper3k
-            metapost[LINK_HASH] = '%s.%s' % (
-                hashlib.md5(short_link.encode('utf-8', 'replace')).hexdigest(), time.time())
+        # patch images: filter out unwanted images
+        # analyses context of images in src post
+        # FIXME: extensive testing
+        # metapost[IMAGES] = list(clean_post_images(src))
 
         return metapost, lookup_version
 
@@ -302,6 +353,13 @@ class DayNlp(Day, PostConfigMixin):
         return hashlib.md5(
             ''.join([str(p[self.db_id_field]) for p in _posts]).encode()
         ).hexdigest()
+
+    def get_summary(self, text: str):
+
+        summary = self.text_summarizer(text)
+        caption = self.title_summarizer(text)
+        categories = self.categorizer(text)
+        return summary, caption, categories
 
     def get_similar(self, post, from_field=None, **kwargs):
         """
@@ -333,13 +391,6 @@ class DayNlp(Day, PostConfigMixin):
         self.log_ok(log_msg, score)
 
         return similar
-
-    def get_summary(self, text: str):
-
-        summary = self.text_summarizer(text)
-        caption = self.title_summarizer(text)
-        categories = self.categorizer(text)
-        return summary, caption, categories
 
     def expand_related(self, post: Post, field: str):
         """

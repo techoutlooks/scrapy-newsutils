@@ -2,33 +2,40 @@
 #
 # Don't forget to add your pipeline to the ITEM_PIPELINES setting
 # See: https://docs.scrapy.org/en/latest/topics/item-pipeline.html
+from typing import Iterable
+from urllib.parse import urljoin
+
 import requests
 from PIL import UnidentifiedImageError
 from PIL import Image
 from imquality import brisque
 from itemadapter import ItemAdapter
+from newsnlp.ad import extract_ad_candidates_from_url
 from scrapy.exceptions import DropItem
 
 from newsutils.conf.post_item import Post
 from newsutils.crawl import BasePostPipeline
-from newsutils.conf import VERSION, SHORT_LINK, PUBLISH_TIME, IMAGES
-
+from newsutils.conf import VERSION, SHORT_LINK, PUBLISH_TIME, IMAGES, KEYWORDS
 
 __all__ = (
-    "posts_similarity", "have_changed",
-    "SaveToDb", "FilterDate", "SaveToDb", "DropLowQualityImages"
+    "similarity", "have_changed",
+    "SaveToDb", "FilterDate", "SaveToDb", "DropNoqaImages"
 )
 
+from newsutils.helpers import compose
 
-def posts_similarity(src: Post, other: Post):
+
+def similarity(src: Iterable[str], other: Iterable[str]):
     """
     Heuristic to quickly compute post similarity without NLP.
-    Computed as the Jacquard distance of respective keywords sets.
+    Computed as the Jaccard distance of respective keywords sets.
+
+    TODO: lemmatize, lowerase, etc.
     """
     assert src and other, \
         "Jaccard similarity not well-defined: `src` or `other` must exist"
 
-    kw1, kw2 = set(src['keywords']), set(other['keywords'])
+    kw1, kw2 = set(src), set(other)
     return len(kw1.intersection(kw2)) / len(kw1.union(kw2))
 
 
@@ -48,7 +55,7 @@ def have_changed(src: Post, other, fields, excluded=None, threshold=0):
     def has_changed(val, db_val):
         if isinstance(val, (list, tuple)):
             return set(val) != set(db_val) if not threshold else \
-                posts_similarity(src, other) < threshold
+                similarity(src[KEYWORDS], other[KEYWORDS]) < threshold
         return val != db_val
 
     return any([has_changed(src[f], other[f])
@@ -75,6 +82,15 @@ class SaveToDb(BasePostPipeline):
 
         post = self.day.save(self.post)
         return post or self.post
+
+
+class FilterCrap(BasePostPipeline):
+
+    def process_post(self):
+        threshold = similarity(self.post[KEYWORDS], self.crap_banned_keywords)
+        if threshold >= self.crap_similarity_threshold:
+            raise DropItem(f"is crap: similarity {threshold} >= {self.crap_similarity_threshold}")
+        return self.post
 
 
 class FilterDate(BasePostPipeline):
@@ -187,7 +203,7 @@ class CheckEdits(BasePostPipeline):
         return existing_post, status
 
 
-class DropLowQualityImages(BasePostPipeline):
+class DropNoqaImages(BasePostPipeline):
     """
     Discards poor quality images from posts before they get saved to the db.
     ie., too small sized, too poor (high BRISQUE score) quality.
@@ -223,7 +239,7 @@ class DropLowQualityImages(BasePostPipeline):
         def has_acceptable_size(image: Image):
             min_w, min_h = self.image_min_size
             return image.width >= min_w and \
-                   image.height >= min_h
+                image.height >= min_h
 
         def has_acceptable_quality(image: Image):
             """
@@ -238,13 +254,14 @@ class DropLowQualityImages(BasePostPipeline):
             """
             try:
                 return brisque.score(image) <= \
-                       self.image_brisque_max_score
+                    self.image_brisque_max_score
             except Exception as exc:
                 self.log_failed(image.shortname_, exc)
                 return self.image_brisque_ignore_exception
 
         keep_images = []
         for url in self.post[IMAGES]:
+            url = urljoin(self.post['link'], url)   # <-- fix relative path
             try:
                 im = Image.open(requests.get(url, stream=True).raw)
                 im.filename = im.filename or url
@@ -263,3 +280,4 @@ class DropLowQualityImages(BasePostPipeline):
 
         # patch post, keep valid images only
         self.post[IMAGES] = keep_images
+

@@ -8,7 +8,7 @@ from daily_query.helpers import mk_datetime
 from .day import Day
 from newsutils.conf.post_item import Post
 from newsutils.conf.mixins import PostConfigMixin
-
+from newsutils.conf import TITLE, TEXT, SHORT_LINK, PUBLISH_TIME
 
 __all__ = [
     "PipelineMixin", "BasePostPipeline",
@@ -61,18 +61,6 @@ class BaseMongoPipeline(PyMongo, PipelineMixin, abc.ABC):
         """ Default implementation. """
         pass
 
-    # def save(self, item):
-    #     """ Tries to fetch an object from database based on the given **filter**.
-    #     If a match is found, it updates the fields passed in the **item** dictionary.
-    #     Creates a new post if item has no id """
-    #
-    #     adapter = ItemAdapter(item)
-    #     item_id = item.get(self.db_id_field, ObjectId())
-    #     adapter.update({self.db_id_field: item_id})
-    #
-    #     return self.collection.update_one(
-    #         {'_id': {'$eq': item_id}}, {"$set": adapter.asdict()}, upsert=True)
-
 
 class BasePostPipeline(PipelineMixin, abc.ABC):
     """
@@ -115,7 +103,7 @@ class BasePostPipeline(PipelineMixin, abc.ABC):
         # drop item is not a `Post` else
         # set post instance and time available.
         if not self.is_valid(item):
-            self.log_ok(f'Dropping invalid post: {item["short_link"]}. '
+            self.log_ok(f'Dropping invalid post: {item["short_link"] or "no `short_link`"}. '
                         f'Errors: {self.errors}')
             raise DropItem("invalid post")
         else:
@@ -135,10 +123,17 @@ class BasePostPipeline(PipelineMixin, abc.ABC):
 
         if not item or not len(item):
             self.errors.append('Item in pipeline is empty')
-        if not isinstance(item, Post):
+        elif not isinstance(item, Post):
             self.errors.append('Item in pipeline is not a `Post`')
-        if not item['publish_time']:
-            self.errors.append('Item has no `publish_time`')
+        else:
+            if not item[SHORT_LINK]:
+                self.errors.append(f'Item has no `{SHORT_LINK}`')
+            if not item[PUBLISH_TIME]:
+                self.errors.append(f'Item has no `{PUBLISH_TIME}`')
+            if not item[TITLE]:
+                self.errors.append(f'Item has no `{TITLE}`')
+            if not item[TEXT]:
+                self.errors.append(f'Item has no `{TEXT}`')
 
         # run custom validation, ie. method `.validate()` if avails
         # it is expected to raise

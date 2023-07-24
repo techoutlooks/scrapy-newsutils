@@ -84,9 +84,10 @@ class Posts(AppSettings):
     LOG_FORMATTER = 'scrapy.logformatter.LogFormatter'
     SPIDER_LOADER_CLASS = 'newsutils.spiderloader.DatabaseSpiderLoader'
     ITEM_PIPELINES = {
-        'newsutils.pipelines.FilterDate': 100,
-        'newsutils.pipelines.CheckEdits': 110,
-        'newsutils.pipelines.DropLowQualityImages': 120,
+        'newsutils.pipelines.FilterCrap': 100,
+        'newsutils.pipelines.FilterDate': 110,
+        'newsutils.pipelines.CheckEdits': 120,
+        'newsutils.pipelines.DropNoqaImages': 200,
         'newsutils.pipelines.SaveToDb': 300
     }
 
@@ -115,11 +116,14 @@ class Posts(AppSettings):
         # =============================================================================================
         # per-post editable/computed fields values.
         #
-        # `item_id_field` must NOT be set to the `db_id_field`,
+        # auto_publish: controls the`.is_draft` state of newly created posts
+        #       if True (the default), hints that the post is created in its final version once for all.
+        # item_id_field: NOT the database id. yields unique posts accurately for handling by the
+        #       `.process_post()` pipeline fn. must NOT be set to the `db_id_field`,
         #       eg. CheckEdits pipeline which relies on `item_id_field` to find an existing version
         #       of a post in the database, given that pipeline items have by definition no value for
         #       `db_id_field` (didn't hit the db yet).
-
+        # DB_ID_FIELD: the database id
         "auto_publish": True,
         "item_id_field": SHORT_LINK,
         **_nlp_base_fields_conf,
@@ -138,28 +142,35 @@ class Posts(AppSettings):
         "meta_uses_nlp": True,
         "metapost_baseurl": None,  # required
         "metapost_link_factory": 'newsutils.conf.mixins.metapost_link_factory',
+        "summary_minimum_length": 100,
 
         # PIPELINES
         # =============================================================================================
         # Following settings control management of post pipelines
         #
-        # item_id_field: NOT the database id. yields unique posts accurately for handling by the
-        #       `.process_post()` pipeline fn
-        # DB_ID_FIELD: the database id
+        # banned_keywords:  ban pipeline item altogether iff post has <<similar>> keywords
+        #       cf. `newsutils.pipelines.similarity()` defines the similarity (Jaccard measure).
         # image_min_size: images should be at least 200x150 px to save to db
-        # auto_publish: controls the`.is_draft` state of newly created posts
-        #       if True (the default), hints that the post is created in its final version once for all.
+
         # image_brisque_ignore_exception: defaults to disregard image quality inspection on error.
         # edits_new_version_fields: fields whose values changes suggest a new post version
         #       subsequently increased by the `CheckEdits` pipeline
         # edits_excluded_fields: computed fields, post version checks should not account for their values,
         #       since they are dynamic.
 
-        # dynamic field names defaults
+        # cloudfare yields .36
+        "crap_banned_keywords":  ['protecting', 'protection', 'protected', 'cloudflare'],
+        "crap_similarity_threshold": .25,
+
+        # image processing
         "image_min_size": (300, 200),
         "image_brisque_max_score": get_env('image_brisque_max_score', 50),
         "image_brisque_ignore_exception": True,
+
+        # edits version pipeline (cf. CheckEdits)
         "edits_new_version_fields": (TITLE, KEYWORDS),
+        "edits_pristine_threshold": .8,
+        "edits_new_version_threshold": .7,
 
         # COMMANDS
         # =============================================================================================
@@ -170,8 +181,6 @@ class Posts(AppSettings):
         "similarity_related_threshold": .2,
         "similarity_max_docs": 2,
 
-        # edits version pipeline (cf. CheckEdits)
-        "edits_pristine_threshold": .8,
-        "edits_new_version_threshold": .7
+
 
     }

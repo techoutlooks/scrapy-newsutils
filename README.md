@@ -84,7 +84,7 @@ Cf. example multistage `Dockerfile` in the `leeram-news/newsbot` project.
 * Setup python env 
 ```shell
 python -m venv venv && source venv/bin/activate
-pip install -r requirements.txt
+pip install -r dev-requirements.txt
 ```
 
 * Define a posts spider manually.

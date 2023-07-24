@@ -9,7 +9,7 @@ LOG_FORMATTER = 'logformatter.LogFormatter'
 ITEM_PIPELINES = {
     'pipelines.posts.FilterDate': 100,
     'pipelines.posts.CheckEdits': 110,
-    'pipelines.posts.DropLowQualityImages': 120,
+    'pipelines.posts.DropNoqaImages': 120,
     'pipelines.posts.SaveToDb': 300,
 }
 

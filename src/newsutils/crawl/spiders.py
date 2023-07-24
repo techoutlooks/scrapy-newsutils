@@ -1,6 +1,6 @@
 import abc
 import datetime
-from typing import Mapping
+from typing import Mapping, Literal
 
 import nltk
 import pycountry
@@ -101,7 +101,7 @@ class PostCrawlerMixin(LoggingMixin):
     # By default, we define below two extraction rules called 'default', 'featured'
     # suitable for common use-cases, to lookup resp. regular, and featured posts.
     # https://devhints.io/xpath
-    rule_sets: Mapping[str, Mapping[str, str]] = {
+    rule_sets: Mapping[str, Mapping[Literal["text", "images"], str]] = {
         FEATURED_POST: None,
         DEFAULT_POST: None,
     }
@@ -139,6 +139,8 @@ class PostCrawlerMixin(LoggingMixin):
 
         # like Post(), but with the defaults presets
         post = mk_post(
+
+            # post data
             country=self.country.alpha_2,
             link=a.url,
             short_link=short_link,
@@ -160,7 +162,7 @@ class PostCrawlerMixin(LoggingMixin):
             # setting initial values
             version=1,
             is_scrap=True,
-            is_draft=not self.settings["POSTS"]['auto_publish']
+            is_draft=not self.settings["POSTS"]['auto_publish'],
         )
 
         self.log_info(f'{OK:<{PADDING}}' 
@@ -180,11 +182,14 @@ class PostCrawlerMixin(LoggingMixin):
         are relevant to that post...
 
         #TODO: move to pipeline?  burden of image parsing if the post
-            might be later deleted by the `DropLowQualityImages`
+            might be later deleted by the `DropNoqaImages`
+        TODO: also capture url from anchor tag of images (ad detection purposes)
         """
         images = []
         if xpath:
             try:
+                if not xpath.endswith("/@src"):
+                    xpath = f"{xpath}/@src"
                 images = response.xpath(xpath).extract()
             except ValueError as e:
                 self.log_info(f'{FAILED:<{PADDING}}{xpath}')

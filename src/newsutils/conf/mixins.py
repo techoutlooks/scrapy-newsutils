@@ -67,25 +67,29 @@ class PostConfigMixin(BaseConfigMixin):
     # ITEM
     # `item_id_field`: Identifies crawled items uniquely. NOT the database id.
     item_id_field = settings['POSTS']['item_id_field']
+    computed_fields = settings['POSTS']['computed_fields']
+    crap_banned_keywords = settings['POSTS']['crap_banned_keywords']
+    crap_similarity_threshold = settings['POSTS']['crap_similarity_threshold']
 
-    # NLP FIELDS
+    # NLP
     caption_field = settings['POSTS']['caption_field']
     category_field = settings['POSTS']["category_field"]
     summary_field = settings['POSTS']['summary_field']
     siblings_field = settings['POSTS']["siblings_field"]
     related_field = settings['POSTS']["related_field"]
+    summary_minimum_length = settings['POSTS']["summary_minimum_length"]
+    metapost_fields = [category_field, caption_field, summary_field]
 
-    # MISC FIELDS
-    computed_fields = settings['POSTS']['computed_fields']
+    # Edits & Versioning
     edits_excluded_fields = settings['POSTS']["edits_excluded_fields"]
     edits_new_version_fields = settings['POSTS']["edits_new_version_fields"]
-    image_min_size = settings['POSTS']['image_min_size']
-    image_brisque_max_score = settings['POSTS']['image_brisque_max_score']
-    image_brisque_ignore_exception = settings['POSTS']['image_brisque_ignore_exception']
-
     edits_pristine_threshold = settings['POSTS']['edits_pristine_threshold']
     edits_new_version_threshold = settings['POSTS']['edits_new_version_threshold']
 
+    # Image processing
+    image_min_size = settings['POSTS']['image_min_size']
+    image_brisque_max_score = settings['POSTS']['image_brisque_max_score']
+    image_brisque_ignore_exception = settings['POSTS']['image_brisque_ignore_exception']
 
     @property
     def similarity(self):
@@ -130,20 +134,26 @@ class PostStrategyMixin(PostConfigMixin):
             :param Post|None post: the post to make the decision about
             :param TaskTypes task_type: identifies the kind of task that is processing the post
             """
+            if not post:
+                return
+
             if post.is_meta \
                     and task_type == TaskTypes.NLP \
                     and not cls.settings['POSTS']['nlp_uses_meta']:
                 return  # filtered out
             return post
 
-        def get_post_text(post, meta=False):
+        def get_post_text(post, meta=False, minimum_length=0) -> str or None:
             """
             Get all meaningful text from post, post's title and body alike.
 
             :param bool meta: a metapost being generated,
                     but `post` is unaware (post.is_meta not set yet)
             :param Post post: the post item
+            :param int minimum_length: minimum text length required
             """
+            if not post:
+                return
 
             # default
             uses_nlp = not post.is_meta and cls.settings['POSTS']['summary_uses_nlp']
@@ -155,7 +165,11 @@ class PostStrategyMixin(PostConfigMixin):
                 title, text = (cls.caption_field if uses_nlp else TITLE,
                                cls.summary_field)
 
-            return add_fullstop(post[title]) + " " + (post[text] or "")
+            post_text = add_fullstop(post[title]) + " " + (post[text] or "")
+            if len(post_text) < (minimum_length or cls.summary_minimum_length):
+                post_text = None
+
+            return post_text
 
         def get_metapost_link(metapost):
             baseurl = cls.settings['POSTS']['metapost_baseurl']
