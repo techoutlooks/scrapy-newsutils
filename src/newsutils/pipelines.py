@@ -10,6 +10,7 @@ from PIL import UnidentifiedImageError
 from PIL import Image
 from imquality import brisque
 from itemadapter import ItemAdapter
+from newsnlp.ad import extract_ad_candidates_from_url
 from scrapy.exceptions import DropItem
 
 from newsutils.conf.post_item import Post
