@@ -1,12 +1,11 @@
 import datetime
 import hashlib
-import time
 from typing import Iterable
 from urllib.parse import urlparse
 
 from daily_query.helpers import mk_datetime
 from newsnlp import TextSummarizer, TitleSummarizer, Categorizer, TfidfVectorizer
-from newsnlp.ad import extract_domain, extract_ad_candidates_from_url, AD_LABEL_COLUMN
+from newsnlp.ad import extract_domain, AD_LABEL_COLUMN
 from newsnlp.ad.models.ad_detector import predict_ads
 
 from newsutils.conf import LINK, TaskTypes, SHORT_LINK, LINK_HASH
@@ -37,6 +36,7 @@ def predict_post_image_ads(post_url: str):
     the geometrical images properties (width, height, size), image src, click destination,
     as well the surrounding context of images (caption, alt).
     """
+    from newsnlp.ad.dataset import extract_ad_candidates_from_url
 
     # load spider context for url
     domain = extract_domain(post_url)
@@ -62,7 +62,7 @@ def predict_post_image_ads(post_url: str):
 def clean_post_images(post: Post):
 
     ad_imgs_urls = map(lambda p: p['_raw']['img_url'],
-        filter(lambda p: pred[AD_LABEL_COLUMN], predict_post_image_ads(post[LINK]))
+        filter(lambda p: p[AD_LABEL_COLUMN], predict_post_image_ads(post[LINK]))
     )
 
     # comparing relative paths since `extract_ad_candidates_from_url()`
