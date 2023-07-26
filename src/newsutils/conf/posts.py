@@ -177,10 +177,7 @@ class Posts(AppSettings):
         # `scrapy nlp <sum|meta> -t ` -t siblings=.4 -t related=.3 -d <day>
         #
         # similarity_max_docs: most similar docs count to return
-        "similarity_siblings_threshold": .4,
-        "similarity_related_threshold": .2,
+        "similarity_siblings_threshold": .2,
+        "similarity_related_threshold": .1,
         "similarity_max_docs": 2,
-
-
-
     }
