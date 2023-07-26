@@ -6,7 +6,6 @@ from urllib.parse import urlparse
 from daily_query.helpers import mk_datetime
 from newsnlp import TextSummarizer, TitleSummarizer, Categorizer, TfidfVectorizer
 from newsnlp.ad import extract_domain, AD_LABEL_COLUMN
-from newsnlp.ad.models.ad_detector import predict_ads
 
 from newsutils.conf import LINK, TaskTypes, SHORT_LINK, LINK_HASH
 from newsutils.conf.mixins import PostConfigMixin
@@ -37,6 +36,7 @@ def predict_post_image_ads(post_url: str):
     as well the surrounding context of images (caption, alt).
     """
     from newsnlp.ad.dataset import extract_ad_candidates_from_url
+    from newsnlp.ad.models.ad_detector import predict_ads
 
     # load spider context for url
     domain = extract_domain(post_url)
