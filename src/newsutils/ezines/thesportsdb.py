@@ -705,7 +705,7 @@ def fetch(endpoint: str, **kwargs):
     params = kwargs
     url = BASE_URL + str(API_KEY) + endpoint
     try:
-        r = requests.get(url, timeout=TIMEOUT, params=params)
+        r = requests.get(url, timeout=CRAWL_TIMEOUT, params=params)
         r.raise_for_status()
     except requests.exceptions.RequestException as e:
         print("fetch error:", e)
