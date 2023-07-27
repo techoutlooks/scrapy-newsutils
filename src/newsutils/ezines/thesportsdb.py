@@ -17,7 +17,8 @@ from newsutils.conf.mixins import BaseConfigMixin
 from newsutils.helpers import get_env
 
 
-TIMEOUT = get_env('TIMEOUT', 1)
+CRAWL_TIMEOUT = get_env('CRAWL_TIMEOUT', 1)
+CRAWL_RATE_LIMIT = get_env('CRAWL_RATE_LIMIT', 3)
 
 
 __all__ = [
@@ -696,8 +697,11 @@ class SportEvent(scrapy.Item):
 
 
 @sleep_and_retry
-@limits(calls=1, period=datetime.timedelta(seconds=60).total_seconds())
+@limits(calls=1, period=datetime.timedelta(seconds=CRAWL_RATE_LIMIT).total_seconds())
 def fetch(endpoint: str, **kwargs):
+    """
+    TheSportsDB free API key requires sening no more than 1 API request per 2 seconds
+    """
     params = kwargs
     url = BASE_URL + str(API_KEY) + endpoint
     try:
