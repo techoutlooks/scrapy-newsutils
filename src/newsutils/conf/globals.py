@@ -30,7 +30,7 @@ __all__ = (
 
 # caches settings for apps defined by this library
 # module global populated by merely importing this module
-_settings = dict()
+_is_configured = False
 
 
 def configure():
@@ -56,23 +56,22 @@ def configure():
 
     """
     from .posts import configure_posts
+    from .sports import configure_ezines
 
-    global _settings
-
-    if not _settings:
-        _settings.update(configure_posts())
-        # _settings.update(get_ezines_settings())
+    global _is_configured
+    if not _is_configured:
+        _is_configured = \
+            bool(configure_posts()) and bool(configure_ezines())
 
     else:
         raise ImproperlyConfigured(
             "`newsutils` module already initialized."
-            "You must call `configure()` exactly once!"
-        )
+            "You may call `configure()` exactly once!")
 
-    return bool(_settings)
+    return _is_configured
 
 
-def get_setting(keypath):
+def get_setting(keypath, cast=None):
     """
     Get a setting's value from its key's dotted-path name
     Assumes project_settings is a multilevel dict-like storage.
@@ -82,4 +81,5 @@ def get_setting(keypath):
     """
     s = get_project_settings()
     root, *children = keypath.split(".")
-    return reduce(lambda _, key: _[key], children, s[root])
+    r = reduce(lambda _, key: _[key], children, s[root])
+    return cast(r) if cast else r

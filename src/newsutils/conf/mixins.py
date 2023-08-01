@@ -1,15 +1,16 @@
+import abc
+import importlib
 from collections import OrderedDict
 
 from scrapy.utils.project import get_project_settings
 
-from . import get_setting
+from .globals import get_setting
 from .constants import TaskTypes, EXCERPT, TITLE, TEXT
-from ..helpers import add_fullstop, get_env, import_attr, evalfn
+from ..helpers import add_fullstop, get_env, import_attr, evalfn, classproperty
 from ..logging import TaskLoggerMixin
 
-
 __all__ = (
-    "BaseConfigMixin", "PostStrategyMixin", "PostConfigMixin",
+    "BaseConfigMixin", "PostStrategyMixin", "PostConfigMixin", "SportsConfigMixin",
     "metapost_link_factory"
 )
 
@@ -40,56 +41,66 @@ def _set_metapost_link_factory():
 class BaseConfigMixin(TaskLoggerMixin):
     """
     Mixin. Exposes utility class attributes.
+    The project's settings module will get automagically patched by the `newsutils` library,
+    on import, with useful defaults; or by calling `newsutils.configure_posts()` explicitly.
     """
 
-    # the project's settings module will get automagically patched
-    # by the `newsutils`library, on import, with useful defaults.
-    # `default_settings = settings` required to prevent override of `.settings`
-    # by the `cmdline.py` module when calling `.process_options()`
-    settings = get_project_settings()  # FIXME: needed? delete since os.sys['settings'] already patched!
-    default_settings = settings
+    @classproperty
+    def settings(self):
+        return get_project_settings()
 
-    # DATABASE FIELDS
-    # `item_id_field`: Identifies crawled items uniquely. NOT the database id.
-    db_uri = settings["CRAWL_DB_URI"]
-    db_id_field = settings['DB_ID_FIELD']
+    @classproperty
+    def default_settings(self):
+        # `default_settings = settings` required to prevent override of `.settings`
+        # by the `cmdline.py` module when calling `.process_options()`
+        return self.settings
+
+    db_uri = get_setting("CRAWL_DB_URI")
+    db_id_field = get_setting("DB_ID_FIELD")
 
 
-class PostConfigMixin(BaseConfigMixin):
+# closure, so the proper value for key is found in the enclosing scope of make_fget
+# when fget gets called, https://stackoverflow.com/a/27630089
+def make_fget(key):
+    def fget(self):
+        return get_setting(f"POSTS.{key}")
+    return fget
+
+
+class PostConfigMeta(abc.ABCMeta):
+    """
+    Metaclass for generating post config utility subclasses
+    with field values extrapolated dynamically.
+
+    Nota: `item_id_field`: Identifies crawled items uniquely. NOT the database id.
+    """
+
+    def __new__(mcs, class_name, bases, attrs):
+
+        field_groups = {
+            'item': ['item_id_field', 'computed_fields', 'crap_banned_keywords', 'crap_similarity_threshold'],
+            'image': ['image_min_size', 'image_brisque_max_score', 'image_brisque_ignore_exception'],
+            'versioning': ['edits_excluded_fields', 'edits_new_version_fields', 'edits_pristine_threshold',
+                           'edits_new_version_threshold'],
+            'nlp': ['caption_field', 'category_field', 'summary_field', 'siblings_field', 'related_field',
+                    'summary_minimum_length', 'nlp_uses_excerpt', 'meta_uses_nlp'],
+        }
+
+        new_attrs = {f: classproperty(make_fget(f))
+                     for f in sum(field_groups.values(), [])}
+
+        new_attrs.update(attrs)
+        return super().__new__(mcs, class_name, bases, new_attrs)
+
+
+class PostConfigMixin(BaseConfigMixin, metaclass=PostConfigMeta):
     """
     Mixin. Exposes utility class attributes.
     """
 
-    # FIXME: fields polluting the namespace,
-    #    use DataClassCard in AppSettings? or set attrs here from snake_cased settings?
-    settings = BaseConfigMixin.settings
-
-    # ITEM
-    # `item_id_field`: Identifies crawled items uniquely. NOT the database id.
-    item_id_field = settings['POSTS']['item_id_field']
-    computed_fields = settings['POSTS']['computed_fields']
-    crap_banned_keywords = settings['POSTS']['crap_banned_keywords']
-    crap_similarity_threshold = settings['POSTS']['crap_similarity_threshold']
-
-    # NLP
-    caption_field = settings['POSTS']['caption_field']
-    category_field = settings['POSTS']["category_field"]
-    summary_field = settings['POSTS']['summary_field']
-    siblings_field = settings['POSTS']["siblings_field"]
-    related_field = settings['POSTS']["related_field"]
-    summary_minimum_length = settings['POSTS']["summary_minimum_length"]
-    metapost_fields = [category_field, caption_field, summary_field]
-
-    # Edits & Versioning
-    edits_excluded_fields = settings['POSTS']["edits_excluded_fields"]
-    edits_new_version_fields = settings['POSTS']["edits_new_version_fields"]
-    edits_pristine_threshold = settings['POSTS']['edits_pristine_threshold']
-    edits_new_version_threshold = settings['POSTS']['edits_new_version_threshold']
-
-    # Image processing
-    image_min_size = settings['POSTS']['image_min_size']
-    image_brisque_max_score = settings['POSTS']['image_brisque_max_score']
-    image_brisque_ignore_exception = settings['POSTS']['image_brisque_ignore_exception']
+    @classproperty
+    def metapost_fields(self):
+        return [self.category_field, self.caption_field, self.summary_field]
 
     @property
     def similarity(self):
@@ -123,6 +134,7 @@ class PostStrategyMixin(PostConfigMixin):
         Yields functions for per-post decisions, based on the
         post's current value and configured settings
         """
+
         def filter_metapost(post, task_type=None):
             """
             Whether to filter out the current post if it is a metapost?
@@ -155,18 +167,18 @@ class PostStrategyMixin(PostConfigMixin):
             if not post:
                 return
 
-            # default
-            uses_nlp = not post.is_meta and cls.settings['POSTS']['summary_uses_nlp']
+            # iff regular post
+            uses_nlp = not post.is_meta and cls.settings['POSTS']['nlp_uses_excerpt']
             title, text = (TITLE, EXCERPT if uses_nlp else TEXT)
 
-            # metapost only
+            # iff metapost
             if post.is_meta or meta:
                 uses_nlp = cls.settings['POSTS']['meta_uses_nlp']
-                title, text = (cls.caption_field if uses_nlp else TITLE,
-                               cls.summary_field)
+                title, text = (cls.caption_field if cls.meta_uses_nlp else TITLE,
+                               cls.summary_field if cls.meta_uses_nlp else TEXT)
 
             post_text = add_fullstop(post[title]) + " " + (post[text] or "")
-            if len(post_text) < (minimum_length or cls.summary_minimum_length):
+            if len(post_text) < int(minimum_length or cls.summary_minimum_length):
                 post_text = None
 
             return post_text
@@ -181,3 +193,6 @@ class PostStrategyMixin(PostConfigMixin):
             "get_metapost_link": get_metapost_link
         }.get(rule)
 
+
+class SportsConfigMixin(BaseConfigMixin):
+    pass

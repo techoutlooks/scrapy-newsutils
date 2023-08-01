@@ -1,9 +1,11 @@
 import os
+from copy import deepcopy
 
 import psutil
 from daily_query.mongo import MongoDaily
 from scrapy.commands import ScrapyCommand
 
+from newsutils.conf import configure_posts
 from newsutils.conf.mixins import PostConfigMixin
 
 __all__ = ("PostCmd", "DayCmd",)
@@ -37,6 +39,13 @@ class PostCmd(PostConfigMixin, ScrapyCommand):
                 pass
         return None
 
+    def set_post_settings(self, params: dict):
+        """ Merge params into `settings.POSTS` """
+        s = deepcopy(self.settings['POSTS'])
+        s.update(params)
+        configure_posts({'POSTS': dict(s)}, priority='cmdline')
+        self.settings.set('POSTS', s, priority='cmdline')
+
 
 class DayCmd(PostCmd):
     """
@@ -45,3 +54,4 @@ class DayCmd(PostCmd):
     """
 
     daily = MongoDaily(PostConfigMixin.db_uri)  # db handle
+

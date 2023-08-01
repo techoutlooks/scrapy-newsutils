@@ -71,6 +71,13 @@ flatmap = lambda f, xs: (y for ys in xs for y in f(ys))
 wordcount = lambda sent: len(sent.split(" "))
 
 
+def strjoin(d: dict, sep='='):
+    """ Recursively join dict items into a string """
+    return ", ".join(
+        [f'%s{sep}%s' % (k, strjoin(v) if isinstance(v, dict) else v)
+         for k, v in d.items()])
+
+
 def add_fullstop(sent: str):
     """ add fullstop to sentence. """
     if not sent:
@@ -105,7 +112,7 @@ def remove_diacritics(text):
 
 # == [SYS] ==
 
-def get_env(name, *args, coerce=None) -> str:
+def get_env(name, *args, coerce=None):
     """
     Get the value for environment variable <name>.
     Takes the default value as only positional arg.

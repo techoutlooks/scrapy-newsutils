@@ -1,8 +1,11 @@
+from ..exceptions import ImproperlyConfigured
 from ..helpers import get_env
 from ..appsettings import AppSettings
 from newsutils.conf.constants import *
 
+
 __all__ = ("configure_posts",)
+
 
 # Dotted path to Project settings module.
 # eg. SCRAPY_SETTINGS_MODULE=crawl.settings
@@ -23,18 +26,29 @@ _nlp_base_fields_conf = {
 }
 
 
-def configure_posts():
+def configure_posts(src=None, **kwargs):
     """
     Merges app settings with scrapy settings,
     Patches stdlib imports for both the scrapy project settings `crawl.settings`, and
     the default settings `scrapy.settings.default_settings`,
 
+    :param AppSettings src: initialized app settings instance to merge from
     :return merged settings dict.
     """
 
+    if not src:
+        settings = Posts(**kwargs)
+    elif isinstance(src, dict) and 'POSTS' in src:
+        settings = type("Posts", (Posts,), src)(**kwargs)
+    elif isinstance(src, AppSettings) and hasattr(src, 'POSTS'):
+        settings = src
+    else:
+        raise ImproperlyConfigured(
+            "`src` must be dict or instance of AppSettings subclass embedding a `POSTS` attribute")
+
     # inject app-defined settings (`Posts`) inside the Scrapy settings,
     # merges (resp. to precedence) env-defined, project-defined and default settings.
-    settings = Posts()(settings_module, 'scrapy.settings.default_settings')
+    settings = settings(settings_module, 'scrapy.settings.default_settings')
 
     # == [ COMPUTED SETTINGS] ==
     # define `computed` settings, typically computed based on other configurable settings.
@@ -130,20 +144,20 @@ class Posts(AppSettings):
 
         # NLP
         # =============================================================================================
-        # section defines inputs for decision making by NLP tasks (see `nlp` module).
+        # section defines inputs for decision-making by NLP tasks (see `nlp` module).
         # cf. `newsutils.crawl.get_strategies()`, yields decision  based on below inputs
         # **tasks** : `similarity`, `summary`, `metapost` generation.
         #
         # nlp_uses_meta: also add metaposts (type==METAPOST) as inputs to NLP tasks?
-        # summary_uses_nlp: (iff !metapost type), use text from `excerpt` field instead of `text` field?
+        # nlp_uses_excerpt: (iff !metapost type), use text from `excerpt` field instead of `text` field?
         # meta_uses_nlp: metapost generation: use text from `caption` field instead of `title` field?
-        # don't attempt summarising if min text length requirement not met
+        # summary_minimum_length: don't attempt summarising if min text length requirement not met
         "nlp_uses_meta": False,
-        "summary_uses_nlp": False,
+        "nlp_uses_excerpt": False,
         "meta_uses_nlp": True,
+        "summary_minimum_length": 50,
         "metapost_baseurl": None,  # required
         "metapost_link_factory": 'newsutils.conf.mixins.metapost_link_factory',
-        "summary_minimum_length": 100,
 
         # PIPELINES
         # =============================================================================================

@@ -3,6 +3,7 @@ Utility classes for pulling sport news from the `thesportsdb.com`
 into the configured database.
 """
 import datetime
+from collections import Counter
 
 import requests
 import scrapy
@@ -12,19 +13,15 @@ from daily_query.mongo import Collection
 from itemadapter import ItemAdapter
 from ratelimit import sleep_and_retry, limits
 
-from newsutils.conf import UNKNOWN
-from newsutils.conf.mixins import BaseConfigMixin
-from newsutils.helpers import get_env
-
-
-CRAWL_TIMEOUT = get_env('CRAWL_TIMEOUT', 1)
-CRAWL_RATE_LIMIT = get_env('CRAWL_RATE_LIMIT', 3)
+from newsutils.conf import UNKNOWN, get_setting
+from newsutils.conf.mixins import SportsConfigMixin
 
 
 __all__ = [
     "SportEvent", "BaseSports", "SchedulesMixin", "Sports",
     "SPORTS", "SPORTS_LEAGUES_MAP"
 ]
+
 
 # static settings for querying the free api at `thesportsdb.com`
 # inspired from `https://github.com/TralahM/thesportsdb`
@@ -635,6 +632,11 @@ DEFAULT_SPORTS_IDS = [102, 106]
 EVENT_ID_FIELDS = 'idLeague', 'idHomeTeam', 'idAwayTeam', 'idEvent'
 
 
+rate_limit = get_setting('SPORTS.rate_limit', int)
+fetch_limit = get_setting('SPORTS.fetch_limit', int)
+timeout = get_setting('SPORTS.timeout', int)
+
+
 class SportEvent(scrapy.Item):
 
     _id = scrapy.Field()
@@ -697,15 +699,15 @@ class SportEvent(scrapy.Item):
 
 
 @sleep_and_retry
-@limits(calls=1, period=datetime.timedelta(seconds=CRAWL_RATE_LIMIT).total_seconds())
+@limits(calls=1, period=datetime.timedelta(seconds=rate_limit).total_seconds())
 def fetch(endpoint: str, **kwargs):
     """
-    TheSportsDB free API key requires sening no more than 1 API request per 2 seconds
+    TheSportsDB free API key requires sending no more than 1 API request per 2 seconds
     """
     params = kwargs
     url = BASE_URL + str(API_KEY) + endpoint
     try:
-        r = requests.get(url, timeout=CRAWL_TIMEOUT, params=params)
+        r = requests.get(url, timeout=timeout, params=params)
         r.raise_for_status()
     except requests.exceptions.RequestException as e:
         print("fetch error:", e)
@@ -714,7 +716,7 @@ def fetch(endpoint: str, **kwargs):
     return r.json()
 
 
-class BaseSports(BaseConfigMixin, Collection):
+class BaseSports(SportsConfigMixin, Collection):
     """
     Base building block for saving various sport news information
     types fetched from https://thesportsdb.com to the database.
@@ -733,7 +735,7 @@ class BaseSports(BaseConfigMixin, Collection):
     def season(self, value: str):
         setattr(self, '_season', value)
 
-    def __init__(self, sports_ids=None, season=None):
+    def __init__(self, sports_ids=None, season=None, limit=fetch_limit):
 
         # initialises a temporary collection named `_default`
         super().__init__(db_or_uri=self.db_uri)
@@ -741,6 +743,7 @@ class BaseSports(BaseConfigMixin, Collection):
         if sports_ids:
             self.sports_ids = sports_ids
         self.season = season
+        self.limit = limit
 
 
 class SchedulesMixin:
@@ -771,15 +774,21 @@ class SchedulesMixin:
         # https://www.thesportsdb.com/league/4335-Spanish-La-Liga
 
         """
+        counter = Counter()
         season = self.season
         for sport_id in self.sports_ids:
             sport_id = str(sport_id)
             leagues_ids = SPORTS_LEAGUES_MAP.get(str(sport_id))
             for league_id in leagues_ids:
+
+                if counter[sport_id] > self.limit:
+                    break
+
                 r = fetch(LEAGUE_SEASON_EVENTS, id=str(league_id), s=season)
                 events = r.get('events', [])
                 if events:
                     for data in events:
+                        counter.update([sport_id])
                         event = SportEvent(data)
                         yield event
 

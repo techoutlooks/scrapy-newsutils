@@ -38,7 +38,13 @@ def log_running(
     overflow: List[OverflowMethod] = "ellipsis",
     style="bold white on blue"
 ):
-    """ Decorator that logs a running task """
+    """
+    Decorator that logs a running task
+    eg.
+        @log_running('a static msg ...')
+        def crawl(self, spider, *args, **kwargs):
+            return self.runner.crawl(spider, *args, **kwargs)
+    """
 
     def _log_running(task):
         def wrapper(self, *args, **kwargs):

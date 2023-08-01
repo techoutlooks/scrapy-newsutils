@@ -56,5 +56,50 @@
         "images": "//*[contains(concat(\" \",normalize-space(@class),\" \"),\" label \")]/following-sibling::p/following-sibling::*[1]/self::p//img/@src"
       }
     }
+  },
+  {
+    "version": 1,
+    "name": "ci-fratmat",
+    "allowed_domains": [
+      "fratmat.info"
+    ],
+    "start_urls": [
+      "https://fratmat.info/"
+    ],
+    "country_code": "CI",
+    "language": "fr",
+    "rule_sets": {
+      "featured": {
+        "text": ".//*[contains(concat(\" \",normalize-space(@class),\" \"),\" fratmat-main-widget-style-one \")]//*[contains(concat(\" \",normalize-space(@class),\" \"),\" article-title \")]",
+        "images": "//*[contains(concat(\" \",normalize-space(@class),\" \"),\" label \")]/following-sibling::p/following-sibling::*[1]/self::p//img/@src"
+      },
+      "default": {
+        "text": ".//*[contains(concat(\" \",normalize-space(@class),\" \"),\" ajaxArticles \")]//*[contains(concat(\" \",normalize-space(@class),\" \"),\" article-title \")]",
+        "images": ".//*[contains(concat(\" \",normalize-space(@class),\" \"),\" fratmat-article-details \")]//picture//img"
+      }
+    }
+  },
+    {
+    "version": 1,
+    "name": "ci-abidjan.net",
+    "allowed_domains": [
+      "abidjan.net/",
+    ],
+    "start_urls": [
+      "https://news.abidjan.net/"
+    ],
+    "country_code": "CI",
+    "language": "fr",
+    "rule_sets": {
+      "featured": {
+        "text": ".//*[contains(concat(\" \",normalize-space(@class),\" \"),\" section-alaune \")]//a",
+        "images": "//*[contains(concat(\" \",normalize-space(@class),\" \"),\" label \")]/following-sibling::p/following-sibling::*[1]/self::p//img/@src"
+      },
+      "default": {
+        "text": ".//*[contains(concat(\" \",normalize-space(@class),\" \"),\" ajaxArticles \")]//*[contains(concat(\" \",normalize-space(@class),\" \"),\" article-title \")]",
+        "images": ".//*[contains(concat(\" \",normalize-space(@class),\" \"),\" fratmat-article-details \")]//picture//img"
+      }
+    }
   }
+
 ]

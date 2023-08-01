@@ -10,7 +10,7 @@ from newsnlp.ad import extract_domain, AD_LABEL_COLUMN
 from newsutils.conf import LINK, TaskTypes, SHORT_LINK, LINK_HASH
 from newsutils.conf.mixins import PostConfigMixin
 from newsutils.crawl import Day
-from newsutils.helpers import wordcount, uniquedicts, dictdiff, add_fullstop, compose
+from newsutils.helpers import wordcount, uniquedicts, dictdiff, add_fullstop, compose, strjoin
 from newsutils.crawl.items import BOT, THIS_PAPER
 from newsutils.conf.post_item import Post, mk_post
 from newsutils.conf import \
@@ -18,13 +18,11 @@ from newsutils.conf import \
     MODIFIED_TIME, IMAGES, VIDEOS, TAGS, IS_DRAFT, IS_SCRAP, KEYWORDS, TOP_IMAGE, PAPER, UNKNOWN
 from newsutils.spiderloader import load_spider_contexts
 
-
 __all__ = (
     "CATEGORY_NOT_FOUND",
     "predict_post_image_ads",
     "DayNlp"
 )
-
 
 CATEGORY_NOT_FOUND = 'N/A'
 
@@ -50,7 +48,7 @@ def predict_post_image_ads(post_url: str):
     get_link_xpath = lambda x: f"{x}parent::a"
     extract_ad_candidates_from_xpath = lambda x: extract_ad_candidates_from_url(post_url, x, raise_exc=False)
     img_xpaths = set([v for rule in spider_ctx['rule_sets'].items()
-                for (k, v) in rule[1].items() if k == 'images'])
+                      for (k, v) in rule[1].items() if k == 'images'])
 
     # execute pipeline to get data suitable for feeding the ad prediction model
     # perform ad prediction inference
@@ -60,17 +58,16 @@ def predict_post_image_ads(post_url: str):
 
 
 def clean_post_images(post: Post):
-
     ad_imgs_urls = map(lambda p: p['_raw']['img_url'],
-        filter(lambda p: p[AD_LABEL_COLUMN], predict_post_image_ads(post[LINK]))
-    )
+                       filter(lambda p: p[AD_LABEL_COLUMN], predict_post_image_ads(post[LINK]))
+                       )
 
     # comparing relative paths since `extract_ad_candidates_from_url()`
     # might have returned relative img paths
     post[IMAGES] = [u for u in post[IMAGES] if urlparse(u).path not in ad_imgs_urls]
 
 
-class DayNlp(Day, PostConfigMixin):
+class DayNlp(Day):
     """
     Helper to perform NLP on posts scraped a given day .
     Performs following tasks, operating as a whole, on the posts generated any given day:
@@ -97,6 +94,14 @@ class DayNlp(Day, PostConfigMixin):
         # set task_type -> NLP so we don't load nor add metaposts to loaded posts (ie. `self.posts`)
         # cf. `Day.save()`
         super().__init__(*args, task_type=TaskTypes.NLP, **kwargs)
+
+        self.log_started(
+            "{similarity}, sumlen={sumlen}, "
+            "nlp_uses_excerpt={nlp_uses_excerpt}, meta_uses_nlp={meta_uses_nlp}",
+            similarity=strjoin(self.similarity),
+            nlp_uses_excerpt=self.nlp_uses_excerpt, meta_uses_nlp=self.meta_uses_nlp,
+            sumlen=self.summary_minimum_length,
+        )
 
         # processing start, both for timing execution, and as a checkpoint
         # to recognize new data (eg. posts edited/inserted by this process)
@@ -336,7 +341,7 @@ class DayNlp(Day, PostConfigMixin):
                 metapost[f] &= post[f]
             for f in IMAGES, VIDEOS, KEYWORDS, TAGS:  # strs
                 metapost[f] = list(set(metapost[f]).union(post[f]))
-            for f in AUTHORS, :  # dicts
+            for f in AUTHORS,:  # dicts
                 metapost[f] = uniquedicts(metapost[f], post[f])
 
         # patch images: filter out unwanted images
@@ -405,11 +410,10 @@ class DayNlp(Day, PostConfigMixin):
         if db_related:
             for db_post in db_related:
                 item_id = db_post.get(self.db_id_field)
-                if item_id:                         # get the next post that matches
-                    post = next(filter(              # id of the related item
+                if item_id:  # get the next post that matches
+                    post = next(filter(  # id of the related item
                         lambda p: p[self.db_id_field] == item_id, self.posts), None)
                     if post:
-                        related += [(post, db_post)]    # return existing value for field as well
+                        related += [(post, db_post)]  # return existing value for field as well
 
         return related
-

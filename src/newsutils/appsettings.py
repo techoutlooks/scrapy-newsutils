@@ -148,8 +148,9 @@ class AppSettings(metaclass=abc.ABCMeta):
     _project_settings = None
     _project_default_settings = None
     _refresh = False  # `_refresh` triggers re-computing settings
+    _signal_registry: list = []
 
-    def __init__(self, config_key=None, required_settings=None, strict=True):
+    def __init__(self, config_key=None, required_settings=None, strict=True, priority='project'):
         """
 
         :param config_key:
@@ -163,12 +164,14 @@ class AppSettings(metaclass=abc.ABCMeta):
         self._config_key = config_key
         self.is_configured: bool = False  # was `.configure()` ever called?
 
-        self.strict, self.required_settings = \
-            strict, list(required_settings) \
-                if isinstance(required_settings, (dict, list, tuple)) else []
+        self.strict, self.priority, self.required_settings = \
+            (strict, priority, list(required_settings)
+            if isinstance(required_settings, (dict, list, tuple)) else [])
 
     def __call__(self, project_settings, project_default_settings):
         self.configure(project_settings, project_default_settings)
+        for fn in self._signal_registry:
+            fn(self.settings)
         return self
 
     def __getitem__(self, key):
@@ -217,7 +220,12 @@ class AppSettings(metaclass=abc.ABCMeta):
         """
         Live project settings. The source of truth.
         Merges the env, the project and the app settings with following override priority:
-        env > project settings > app's defaults.
+        env > project settings > app's defaults iff priority=='project'
+        defaults > env > project settings iff priority=='cmdline'
+
+        Nota: env is expected to be priorly set as an uppercase class property
+        cf. https://pypi.org/project/python-environ/
+            eg. POSTS=metapost_baseurl\=http://localhost:3100/post
         """
 
         # return locally cached settings if existed and refresh not requested
@@ -233,6 +241,11 @@ class AppSettings(metaclass=abc.ABCMeta):
             # with `coerce=True`, requires env var to be of the same type as the setting's default value.
             _default: dict = copy.deepcopy(self.defaults[key])
             _override = get_env(key, getattr(self._project_settings, key, _default), coerce=True)
+
+            # swap
+            if self.priority == 'cmdline':
+                _ = _override
+                _override, _default = _default, _
 
             if key == self.config_key:
                 self._validate_config(_override)
@@ -361,3 +374,6 @@ err_msgs = {
         "The %(keys)s setting(s) must not be empty!"
 
 }
+
+
+
