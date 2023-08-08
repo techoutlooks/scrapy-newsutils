@@ -265,7 +265,7 @@ class DropNoqaImages(BasePostPipeline):
                 im = Image.open(requests.get(url, stream=True).raw)
                 im.filename = im.filename or url
                 im.shortname_ = im.filename.rsplit("/", 1)[-1]  # pseudo prop
-            except UnidentifiedImageError:
+            except (UnidentifiedImageError, requests.exceptions.ConnectionError):
                 continue
 
             if has_acceptable_size(im) and has_acceptable_quality(im):

@@ -1,10 +1,13 @@
 import abc
 import datetime
 from typing import Mapping, Literal
+from urllib.parse import urljoin
 
+import dateparser
 import nltk
 import pycountry
 import scrapy
+from dateparser.search import search_dates
 from htmldate import find_date
 from scrapy.item import ItemMeta
 
@@ -43,6 +46,7 @@ FEATURED_POST = "featured"
 class PostCrawlerMeta(abc.ABCMeta):
     """
     Sets crawl rules dynamically based on the `.rule_sets` classproperty.
+    Introduces rule sets as xpaths locators for an article's text, image, publication date.
     https://realpython.com/python-metaclasses/
     https://www.geeksforgeeks.org/__new__-in-python/
     """
@@ -72,7 +76,7 @@ class PostCrawlerMeta(abc.ABCMeta):
         # TODO: yaml validation (TODO: first, store spider context as yaml field)
         assert crawler.rule_sets and filter(None, crawler.rule_sets.values()), \
             "`rule_sets` must be a mapping of post_type (eg. 'default', 'featured'), " \
-            "with values resp. Mapping['text'|'images', XPath]"
+            "with values resp. Mapping['text'|'images'|'published', XPath]"
 
 
 class PostCrawlerMixin(LoggingMixin):
@@ -101,7 +105,7 @@ class PostCrawlerMixin(LoggingMixin):
     # By default, we define below two extraction rules called 'default', 'featured'
     # suitable for common use-cases, to lookup resp. regular, and featured posts.
     # https://devhints.io/xpath
-    rule_sets: Mapping[str, Mapping[Literal["text", "images"], str]] = {
+    rule_sets: Mapping[str, Mapping[Literal["text", "images", "published"], str]] = {
         FEATURED_POST: None,
         DEFAULT_POST: None,
     }
@@ -109,7 +113,8 @@ class PostCrawlerMixin(LoggingMixin):
     def parse_post(self, response, type, rules) -> Post:
         """
         :param str type: post type
-        :param Mapping[str, str] rules: rules for extraction of both text and images urls.
+        :param Mapping[Literal["text", "images", "published", str] rules: set of xpath strings pointers
+            for extracting text and images urls, as well as the publication date from an article.
         """
 
         a = Article(response.url, config=config)
@@ -125,7 +130,7 @@ class PostCrawlerMixin(LoggingMixin):
 
         # quit processing posts that'll eventually get dropped by pipelines
         # cf. `newsutils.pipelines.FilterDate`
-        publish_time = self.parse_post_time(a, coerce=True)
+        publish_time = self.parse_post_time(response, a, xpath=rules.get('published'), coerce=True)
         if publish_time.date() not in self.filter_dates:
             self.log_info(f'{OK:<{PADDING}}' 
                           f'skipping expired {type} article {short_link}: '
@@ -169,34 +174,71 @@ class PostCrawlerMixin(LoggingMixin):
                       f'parsing {type} post {post["short_link"]}')
         return post
 
-    def parse_post_time(self, a: Article, coerce=False) -> str or datetime.datetime:
-        post_time = str(a.publish_date) if a.publish_date else (find_date(a.html) or None)
+    def parse_post_time(self, r, a: Article, xpath=None, coerce=False) -> str or datetime.datetime:
+        """
+        Guess the publication time from the article.
+        Tries few heuristics first, then attempt extraction from xpath if any,
+        fails over to today, iff all of above had fail.
+
+        :param r: the response
+        :param Article a: the article, as parsed by the newspaper3k library
+        :param str xpath: xpath locator for the article's publication time
+        :param bool coerce: whether to cast post publication time into datetime
+        """
+
+        # `extensive_search=True` (default) parses the article's copyright,
+        # yields erroneous dates eg. '1998-01-01'
+        post_time = str(a.publish_date) if a.publish_date \
+            else find_date(a.html, extensive_search=False)
+        if not post_time and xpath:
+            try:
+                post_time = l[0] if (l := r.xpath(xpath).extract()) else None
+                post_time = next(iter(search_dates(post_time, languages=[self.language.lower()])), None)
+                post_time = (post_time or [None])[1]
+
+            except ValueError as e:
+                if not "XPath error" in str(e):
+                    raise
+                err_msg = \
+                    (f"{FAILED:<{PADDING}} post time extraction failed, "
+                     f"assuming `today: {xpath}`")
+                self.log_info(err_msg)
+                self.log_debug(f"{str(e)}: {xpath}")
+
+        # `mk_datetime` returns now time if post_time was None
         if coerce:
             post_time = mk_datetime(post_time)
         return post_time
 
-    def parse_post_images(self, response, a: Article, xpath: str):
+    def parse_post_images(self, r, a, xpath: str or list or tuple):
         """
         Improved images url parsing vs `newspaper` module
-        Not all images intermeddled with a post content (eg. interstitial ads)
-        are relevant to that post...
+        Rationale: not all images intermeddled with a post text are relevant to that post
+        (eg. interstitial ads).
 
-        #TODO: move to pipeline?  burden of image parsing if the post
+        :param HtmlResponse r: the response
+        :param Article a: the article, as parsed by the newspaper3k library
+        :param str xpath: xpath locator for the article's publication time
+
+        TODO: move to pipeline?  burden of image parsing if the post
             might be later deleted by the `DropNoqaImages`
-        TODO: also capture url from anchor tag of images (ad detection purposes)
-        """
-        images = []
-        if xpath:
-            try:
-                if not xpath.endswith("/@src"):
-                    xpath = f"{xpath}/@src"
-                images = response.xpath(xpath).extract()
-            except ValueError as e:
-                self.log_info(f'{FAILED:<{PADDING}}{xpath}')
-                self.log_debug(str(e))
 
-        images = images or list(a.images)
-        top_image = images[0] if images else a.top_image
+        TODO: also capture url from anchor tag of images (ad detection purposes)
+        TODO: perform ad detection here or inside pipeline
+        """
+        images = set()
+        if xpath:
+            for p in (xpath if isinstance(xpath, (list, tuple)) else [xpath]):
+                try:
+                    if r.xpath(p).get().startswith('<img'):
+                        p = f"{p}/@src"
+                    images.update(map(lambda x: urljoin(a.url, x), r.xpath(p).extract()))
+                except ValueError as e:
+                    self.log_info(f'{FAILED:<{PADDING}}{p}')
+                    self.log_debug(str(e))
+
+        images = list(images or a.images)
+        top_image = images[0] if images else urljoin(a.url, a.top_image)
         return images, top_image
 
     def get_post_context(self, *args, days={}, **kwargs):

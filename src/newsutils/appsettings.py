@@ -6,7 +6,6 @@ from typing import List
 from .exceptions import ImproperlyConfigured
 from .helpers import camel_to_snake, get_env
 
-
 __all__ = (
     "configure", "requires_configured",
     "AppSettings",
@@ -50,7 +49,9 @@ def requires_configured(validate_config=False):
                 config = self.settings.get(self.config_key)
                 self._validate_config(config)
             return method(self, *args, **kwargs)
+
         return wrapper
+
     return _requires_configured
 
 
@@ -374,6 +375,3 @@ err_msgs = {
         "The %(keys)s setting(s) must not be empty!"
 
 }
-
-
-

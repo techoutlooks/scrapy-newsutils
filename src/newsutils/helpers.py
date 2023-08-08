@@ -123,7 +123,7 @@ def get_env(name, *args, coerce=None):
     :param str name: env name
     :param bool|str coerce: whether to require env var to assume a certain type
         coerce==False: dismiss type casting. similar to using `env()`
-        coerce==True: auto-detection of casting type
+        coerce==True: auto-detection of type cast, inferred from the default value.
         type(coerce)==string: requires type casting method name
             eg. 'int'|'str'|'bool'|'dict', etc.
             cf. https://pypi.org/project/environs/#supported-types

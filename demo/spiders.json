@@ -37,6 +37,25 @@
   },
   {
     "version": 1,
+    "name": "gn-guineenews",
+    "allowed_domains": ["guineenews.org"],
+    "start_urls": ["https://guineenews.org/"],
+    "country_code": "GN",
+    "language": "fr",
+    "rule_sets": {
+        "featured": {
+          "text": ".//article[contains(concat(\" \",normalize-space(@class),\" \"),\" listing-item-classic \")]//a[contains(concat(\" \",normalize-space(@class),\" \"),\" post-url \")]",
+          "images": ["//article//img/@src", "//article//img/@data-src"]
+        },
+        "default": {
+          "text": "//span[contains(concat(\" \",normalize-space(@class),\" \"),\" h-text \") and text()=\"DERNIÈRES NOUVELLES\"]/following::div[1]//article//a[@title]",
+          "images": "//article//img/@src | //article//img/@data-src"
+        }
+    }
+},
+
+  {
+    "version": 1,
     "name": "sn-igfm",
     "allowed_domains": [
       "igfm.sn"
@@ -59,6 +78,51 @@
   },
   {
     "version": 1,
+    "name": "sn-rewmi",
+    "allowed_domains": [
+      "rewmi.com"
+    ],
+    "start_urls": [
+      "https://www.rewmi.com/"
+    ],
+    "country_code": "SN",
+    "language": "fr",
+    "rule_sets": {
+      "featured": {
+        "text": ".//*[@id=\"featured-posts\"]//*[contains(concat(\" \",normalize-space(@class),\" \"),\" featured-title \")]//a",
+        "images": ".//article//img"
+      },
+      "default": {
+        "text": ".//article//*[contains(concat(\" \",normalize-space(@class),\" \"),\" post-box-title \")]//a",
+        "images": ".//article//img"
+      }
+    }
+  },
+  {
+    "version": 1,
+    "name": "sn-seneweb",
+    "allowed_domains": [
+      "seneweb.com"
+    ],
+    "start_urls": [
+      "https://www.seneweb.com/"
+    ],
+    "country_code": "SN",
+    "language": "fr",
+    "rule_sets": {
+      "featured": {
+        "text": ".//a[contains(concat(\" \",normalize-space(@class),\" \"),\" module_main_post_title \")]",
+        "images": ".//*[contains(concat(\" \",normalize-space(@class),\" \"),\" post_video \")]//img"
+      },
+      "default": {
+        "text": ".//a[contains(concat(\" \",normalize-space(@class),\" \"),\" module_hot_title \")]",
+        "images": ".//*[contains(concat(\" \",normalize-space(@class),\" \"),\" post_video \")]//img"
+      }
+    }
+  },
+
+  {
+    "version": 1,
     "name": "ci-fratmat",
     "allowed_domains": [
       "fratmat.info"
@@ -79,11 +143,12 @@
       }
     }
   },
-    {
+  {
     "version": 1,
     "name": "ci-abidjan.net",
     "allowed_domains": [
-      "abidjan.net/",
+      "abidjan.net",
+      "news.abidjan.net"
     ],
     "start_urls": [
       "https://news.abidjan.net/"
@@ -92,14 +157,37 @@
     "language": "fr",
     "rule_sets": {
       "featured": {
+        "published": ".//*[contains(concat(\" \",normalize-space(@class),\" \"),\" date \")]",
         "text": ".//*[contains(concat(\" \",normalize-space(@class),\" \"),\" section-alaune \")]//a",
-        "images": "//*[contains(concat(\" \",normalize-space(@class),\" \"),\" label \")]/following-sibling::p/following-sibling::*[1]/self::p//img/@src"
+        "images": ".//article//*[contains(concat(\" \",normalize-space(@class),\" \"),\" visuel \")]//img/@data-original"
       },
       "default": {
-        "text": ".//*[contains(concat(\" \",normalize-space(@class),\" \"),\" ajaxArticles \")]//*[contains(concat(\" \",normalize-space(@class),\" \"),\" article-title \")]",
-        "images": ".//*[contains(concat(\" \",normalize-space(@class),\" \"),\" fratmat-article-details \")]//picture//img"
+        "published": ".//*[contains(concat(\" \",normalize-space(@class),\" \"),\" date \")]",
+        "text": ".//a[contains(concat(\" \",normalize-space(@class),\" \"),\" ebloc-mini \")]",
+        "images": ".//article//*[contains(concat(\" \",normalize-space(@class),\" \"),\" visuel \")]//img/@data-original"
+      }
+    }
+  },
+  {
+    "version": 1,
+    "name": "ci-aip",
+    "allowed_domains": [
+      "aip.ci"
+    ],
+    "start_urls": [
+      "https://www.aip.ci/"
+    ],
+    "country_code": "CI",
+    "language": "fr",
+    "rule_sets": {
+      "featured": {
+        "text": ".//a[contains(concat(\" \",normalize-space(@class),\" \"),\" hk-gridunit-imglink \")]",
+        "images": ".//img[contains(concat(\" \",normalize-space(@class),\" \"),\" wp-post-image \")]"
+      },
+      "default": {
+        "text": ".//a[contains(concat(\" \",normalize-space(@class),\" \"),\" post-list-link \")]",
+        "images": ".//img[contains(concat(\" \",normalize-space(@class),\" \"),\" wp-post-image \")]"
       }
     }
   }
-
 ]
