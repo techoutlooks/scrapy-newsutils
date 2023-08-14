@@ -292,8 +292,8 @@ class StorageUpload(StorageUploadMixin, BasePostPipeline):
     def process_post(self):
         if not self.is_dev:
             self.upload_to_gcloud_storage()
+        return self.post
 
     def upload_to_gcloud_storage(self):
         self.post[IMAGES] = list(self.from_urls(self.post[IMAGES]))
         self.post[TOP_IMAGE] = next(iter(self.from_urls([self.post[TOP_IMAGE]])), self.post[TOP_IMAGE])
-        return self.post

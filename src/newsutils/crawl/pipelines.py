@@ -103,7 +103,7 @@ class BasePostPipeline(PipelineMixin, abc.ABC):
         # drop item is not a `Post` else
         # set post instance and time available.
         if not self.is_valid(item):
-            self.log_ok(f'Dropping invalid post: {item["short_link"] or "no `short_link`"}. '
+            self.log_ok(f'Dropping invalid post: {item[SHORT_LINK] or "no `short_link`"}. '
                         f'Errors: {self.errors}')
             raise DropItem("invalid post")
         else:
