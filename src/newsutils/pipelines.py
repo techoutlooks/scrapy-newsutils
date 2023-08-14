@@ -8,20 +8,23 @@ from urllib.parse import urljoin
 import requests
 from PIL import UnidentifiedImageError
 from PIL import Image
+from google.cloud import storage
 from imquality import brisque
 from itemadapter import ItemAdapter
 from scrapy.exceptions import DropItem
 
+from newsutils.conf.mixins import StorageUploadMixin
 from newsutils.conf.post_item import Post
 from newsutils.crawl import BasePostPipeline
-from newsutils.conf import VERSION, SHORT_LINK, PUBLISH_TIME, IMAGES, KEYWORDS
+from newsutils.helpers import compose
+from newsutils.storage import upload_blob_from_url
+from newsutils.conf import get_setting, \
+    VERSION, SHORT_LINK, PUBLISH_TIME, IMAGES, KEYWORDS, TOP_IMAGE
 
 __all__ = (
     "similarity", "have_changed",
     "SaveToDb", "FilterDate", "SaveToDb", "DropNoqaImages"
 )
-
-from newsutils.helpers import compose
 
 
 def similarity(src: Iterable[str], other: Iterable[str]):
@@ -260,7 +263,7 @@ class DropNoqaImages(BasePostPipeline):
 
         keep_images = []
         for url in self.post[IMAGES]:
-            url = urljoin(self.post['link'], url)   # <-- fix relative path
+            url = urljoin(self.post['link'], url)  # <-- fix relative path
             try:
                 im = Image.open(requests.get(url, stream=True).raw)
                 im.filename = im.filename or url
@@ -280,3 +283,17 @@ class DropNoqaImages(BasePostPipeline):
         # patch post, keep valid images only
         self.post[IMAGES] = keep_images
 
+
+class StorageUpload(StorageUploadMixin, BasePostPipeline):
+    """
+    Save static assets to cloud storage bucket iff ENV != 'development'
+    """
+
+    def process_post(self):
+        if not self.is_dev:
+            self.upload_to_gcloud_storage()
+
+    def upload_to_gcloud_storage(self):
+        self.post[IMAGES] = list(self.from_urls(self.post[IMAGES]))
+        self.post[TOP_IMAGE] = next(iter(self.from_urls([self.post[TOP_IMAGE]])), self.post[TOP_IMAGE])
+        return self.post

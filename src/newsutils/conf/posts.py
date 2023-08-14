@@ -1,3 +1,5 @@
+from typing import Literal
+
 from ..exceptions import ImproperlyConfigured
 from ..helpers import get_env
 from ..appsettings import AppSettings
@@ -91,6 +93,7 @@ class Posts(AppSettings):
         since they depend on other dynamics settings.
 
     """
+    ENV: Literal['production', 'development'] = 'development'
 
     # Scrapy settings (overrides)
     # -----------------------------------------------------------------------------
@@ -102,19 +105,26 @@ class Posts(AppSettings):
         'newsutils.pipelines.FilterDate': 110,
         'newsutils.pipelines.CheckEdits': 120,
         'newsutils.pipelines.DropNoqaImages': 200,
-        'newsutils.pipelines.SaveToDb': 300
+        'newsutils.pipelines.StorageUpload': 210,
+        'newsutils.pipelines.SaveToDb': 300,
     }
 
     # Custom settings (scrapy-newsutils)
     # -----------------------------------------------------------------------------
-    # TODO: replace MongoDB with CouchDB
-    # MongoDB only is supported. This is temporary.
-    # BasePipeline's `get_setting` raises an exception if settings are not defined.
-    CRAWL_DB_URI = 'mongodb://localhost:27017/scraped_news_db'
-    CRAWL_DB_SPIDERS = '_spiders'
-
-    # DB_ID_FIELD: row id from the database engine
+    # MongoDB database location and settings for saving text-based content only.
+    # BasePipeline's `get_setting` raises an exception if `DB_*` settings are not defined.
+    #
+    # DB_URI" MongoDB database url
+    # DB_SPIDERS:   collection of contexts to initialize `BasePostCrawler` instances from
+    # DB_ID_FIELD:  the database id
+    DB_URI = 'mongodb://localhost:27017/scraped_news_db'
+    DB_SPIDERS = '_spiders'
     DB_ID_FIELD = '_id'
+
+    # Google Cloud Storage Bucket for crawled assets
+    # Binary assets eg. images, pdfs, etc. are saved separately from text (database).
+    # requires env `GOOGLE_APPLICATION_CREDENTIALS` !
+    MEDIA_STORAGE = 'leeram-news'
 
     BRANDING = {
         "bot_image_url": None,
@@ -137,7 +147,6 @@ class Posts(AppSettings):
         #       eg. CheckEdits pipeline which relies on `item_id_field` to find an existing version
         #       of a post in the database, given that pipeline items have by definition no value for
         #       `db_id_field` (didn't hit the db yet).
-        # DB_ID_FIELD: the database id
         "auto_publish": True,
         "item_id_field": SHORT_LINK,
         **_nlp_base_fields_conf,
@@ -179,7 +188,7 @@ class Posts(AppSettings):
 
         # image processing
         "image_min_size": (300, 200),
-        "image_brisque_max_score": get_env('image_brisque_max_score', 50),
+        "image_brisque_max_score": 50,
         "image_brisque_ignore_exception": True,
 
         # edits version pipeline (cf. CheckEdits)

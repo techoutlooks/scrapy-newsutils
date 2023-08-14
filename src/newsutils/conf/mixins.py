@@ -1,16 +1,19 @@
 import abc
-import importlib
 from collections import OrderedDict
 
 from scrapy.utils.project import get_project_settings
 
 from .globals import get_setting
 from .constants import TaskTypes, EXCERPT, TITLE, TEXT
-from ..helpers import add_fullstop, get_env, import_attr, evalfn, classproperty
+from ..helpers import add_fullstop, import_attr, evalfn, classproperty, compose
 from ..logging import TaskLoggerMixin
+from ..storage import upload_blob_from_url
+
 
 __all__ = (
-    "BaseConfigMixin", "PostStrategyMixin", "PostConfigMixin", "SportsConfigMixin",
+    "BaseConfigMixin", "PostStrategyMixin", "PostConfigMixin",
+    "SportsConfigMixin",
+    "StorageUploadMixin",
     "metapost_link_factory"
 )
 
@@ -55,8 +58,10 @@ class BaseConfigMixin(TaskLoggerMixin):
         # by the `cmdline.py` module when calling `.process_options()`
         return self.settings
 
-    db_uri = get_setting("CRAWL_DB_URI")
+    db_uri = get_setting("DB_URI")
     db_id_field = get_setting("DB_ID_FIELD")
+    media_storage = get_setting("MEDIA_STORAGE")
+    is_dev = get_setting("ENV") == "development"
 
 
 # closure, so the proper value for key is found in the enclosing scope of make_fget
@@ -196,3 +201,19 @@ class PostStrategyMixin(PostConfigMixin):
 
 class SportsConfigMixin(BaseConfigMixin):
     pass
+
+
+upload_from_urls = lambda urls: filter(None, map(lambda u: upload_blob_from_url(
+    u, PostConfigMixin.media_storage, raise_exc=False), urls))
+
+
+class StorageUploadMixin(PostConfigMixin):
+    """
+    Facility to upload files to a Google Cloud Storage bucket.
+    """
+
+    @classmethod
+    def from_urls(cls, image_urls: [str]) -> [str]:
+        get_uploads = compose(lambda blobs: map(
+            lambda b: b.public_url, blobs), upload_from_urls)
+        return get_uploads(image_urls)

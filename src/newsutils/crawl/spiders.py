@@ -193,7 +193,8 @@ class PostCrawlerMixin(LoggingMixin):
         if not post_time and xpath:
             try:
                 post_time = l[0] if (l := r.xpath(xpath).extract()) else None
-                post_time = next(iter(search_dates(post_time, languages=[self.language.lower()])), None)
+                post_time = next(iter(search_dates(post_time, languages=[
+                    self.language.lower()]) or []), None)
                 post_time = (post_time or [None])[1]
 
             except ValueError as e:
@@ -230,7 +231,7 @@ class PostCrawlerMixin(LoggingMixin):
         if xpath:
             for p in (xpath if isinstance(xpath, (list, tuple)) else [xpath]):
                 try:
-                    if r.xpath(p).get().startswith('<img'):
+                    if (r.xpath(p).get() or '').startswith('<img'):
                         p = f"{p}/@src"
                     images.update(map(lambda x: urljoin(a.url, x), r.xpath(p).extract()))
                 except ValueError as e:

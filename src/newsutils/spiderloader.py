@@ -36,8 +36,8 @@ def load_spider_contexts(domain=None, **match):
 
     try:
         db_col = Collection(
-            get_setting('CRAWL_DB_SPIDERS'),
-            db_or_uri=get_setting("CRAWL_DB_URI"))
+            get_setting('DB_SPIDERS'),
+            db_or_uri=get_setting("DB_URI"))
 
         for ctx in db_col.find_max('version', groupby='name', match={'version': {'$nin': [0]}}):
             if (domain and not list(filter(lambda u: urlparse(u).netloc.endswith(domain), ctx['start_urls']))) \

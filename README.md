@@ -120,7 +120,7 @@ EOF
 
 * Define a posts spider dynamically. 
 Initialisation context is read from the database as part of the project.
-cf. `settings.CRAWL_DB_URI`. Eg., run following and import generated `spiders.json` to MongoDB \
+cf. `settings.DB_URI`. Eg., run following and import generated `spiders.json` to MongoDB \
 **Nota**: Set the `.version` field to integer value `0` to disable a spider,
 otherwise loads latest version of any spider. 
 
