@@ -287,6 +287,12 @@ class DropNoqaImages(BasePostPipeline):
 class StorageUpload(StorageUploadMixin, BasePostPipeline):
     """
     Save static assets to cloud storage bucket iff ENV != 'development'
+    Requisite: set gcloud env `GOOGLE_APPLICATION_CREDENTIALS`
+    Requisite: set env `ENV` to anything but "development", lest this pipeline performs nothing.
+
+    >>> sa_json = "path/to/gcloud_service_account.json"
+    >>> os.environ['GOOGLE_APPLICATION_CREDENTIALS'] = sa_json
+    >>> os.environ['ENV'] = "staging"
     """
 
     def process_post(self):

@@ -1,15 +1,17 @@
 """
 Upload binary files to Google Cloud Storage bucket
+Nota:
 Example usages:
 
 >>> bucket = "leeram-news"
 >>> url = "https://unsplash.com/photos/hteGzeFuB7w"
 >>> upload_blob_from_url(url, bucket)
->>> storage_client.create_bucket(bucket)
+>>> get_storage_client().create_bucket(bucket)
 
 Requisite: set gcloud env
 >>> sa_json = "path/to/gcloud_service_account.json"
 >>> os.environ['GOOGLE_APPLICATION_CREDENTIALS'] = sa_json
+
 
 Docs:
  - [gcloud](https://gcloud.readthedocs.io/en/latest/storage-buckets.html)
@@ -32,19 +34,29 @@ from newsutils.logging import LoggingMixin
 
 
 __all__ = (
-    "set_bucket_public_iam", "storage_client",
+    "set_bucket_public_iam", "get_storage_client",
     "upload_blob_from_url", "upload_blob_from_bytesio",
     "get_object_size", "get_object_name",
 )
 
 
-# requires env `GOOGLE_APPLICATION_CREDENTIALS`
-storage_client = storage.Client()
-
-
 # storage logger instance
 logger = LoggingMixin()
 logger._logger_name = __file__.rsplit("/", 1)[-1]
+
+
+_storage_client: storage.Client = None
+
+
+def get_storage_client(sa_json: str):
+    """
+    requires env `GOOGLE_APPLICATION_CREDENTIALS`
+    """
+    global _storage_client
+    if not _storage_client:
+        _storage_client = storage.Client.from_service_account_json(sa_json) \
+            if sa_json else storage.Client()
+    return _storage_client
 
 
 def get_object_size(buffer: io.BytesIO):
@@ -103,7 +115,7 @@ def upload_blob_from_bytesio(buffer, content_type, name, bucket, **kwargs) -> Bl
     """
 
     if not isinstance(bucket, Bucket):
-        bucket = storage_client.get_bucket(bucket)
+        bucket = get_storage_client().get_bucket(bucket)
 
     blob = bucket.blob(name)
     blob.upload_from_string(buffer.read(), content_type=content_type, **kwargs)
@@ -116,7 +128,7 @@ def set_bucket_public_iam(
 ):
     """Set a public IAM Policy to bucket"""
 
-    bucket = storage_client.bucket(bucket_name)
+    bucket = get_storage_client().bucket(bucket_name)
     policy = bucket.get_iam_policy(requested_policy_version=3)
     policy.bindings.append({
         "role": "roles/storage.objectViewer", "members": members})
