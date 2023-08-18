@@ -1,6 +1,7 @@
 import abc
 import datetime
-from typing import Mapping, Literal
+from collections import deque
+from typing import Mapping, Literal, Dict
 from urllib.parse import urljoin
 
 import dateparser
@@ -9,6 +10,7 @@ import pycountry
 import scrapy
 from dateparser.search import search_dates
 from htmldate import find_date
+from newspaper.outputformatters import OutputFormatter
 from scrapy.item import ItemMeta
 
 from newsutils.logging import LoggingMixin, FAILED, OK, PADDING
@@ -47,6 +49,7 @@ class PostCrawlerMeta(abc.ABCMeta):
     """
     Sets crawl rules dynamically based on the `.rule_sets` classproperty.
     Introduces rule sets as xpaths locators for an article's text, image, publication date.
+    https://stackoverflow.com/a/25352434
     https://realpython.com/python-metaclasses/
     https://www.geeksforgeeks.org/__new__-in-python/
     """
@@ -64,14 +67,13 @@ class PostCrawlerMeta(abc.ABCMeta):
                  callback='parse_post',
                  cb_kwargs={TYPE: post_type, 'rules': rules},
                  follow=False)
-            # rules -> Mapping['text'|'images', XPath] of both text and images
+            # rules -> Mapping['url'|'text'|'images', XPath] of both text and images
             for post_type, rules in crawler.rule_sets.items()
-            for (mimetype, xpath) in (rules or {}).items()
+            for (mimetype, xpath) in (rules or {}).items() if mimetype == 'link'
         ]
         return crawler
 
     def validate_rule_sets(cls, crawler):
-        pass
 
         # TODO: yaml validation (TODO: first, store spider context as yaml field)
         assert crawler.rule_sets and filter(None, crawler.rule_sets.values()), \
@@ -105,7 +107,7 @@ class PostCrawlerMixin(LoggingMixin):
     # By default, we define below two extraction rules called 'default', 'featured'
     # suitable for common use-cases, to lookup resp. regular, and featured posts.
     # https://devhints.io/xpath
-    rule_sets: Mapping[str, Mapping[Literal["text", "images", "published"], str]] = {
+    rule_sets: Mapping[str, Mapping[Literal["url", "text", "images", "published"], str]] = {
         FEATURED_POST: None,
         DEFAULT_POST: None,
     }
@@ -113,7 +115,7 @@ class PostCrawlerMixin(LoggingMixin):
     def parse_post(self, response, type, rules) -> Post:
         """
         :param str type: post type
-        :param Mapping[Literal["text", "images", "published", str] rules: set of xpath strings pointers
+        :param Mapping[Literal["text", "images", "published"], str] rules: set of xpath strings pointers
             for extracting text and images urls, as well as the publication date from an article.
         """
 
@@ -127,6 +129,12 @@ class PostCrawlerMixin(LoggingMixin):
         a.nlp()
 
         short_link = a.url.replace(a.source_url, '')
+
+        # custom text extraction from article
+        self.set_post_text(a, rules=dict(
+            text=rules.get('text'),
+            remove_text=rules.get('remove_text'),
+        ))
 
         # quit processing posts that'll eventually get dropped by pipelines
         # cf. `newsutils.pipelines.FilterDate`
@@ -174,11 +182,25 @@ class PostCrawlerMixin(LoggingMixin):
                       f'parsing {type} post {post["short_link"]}')
         return post
 
+    def set_post_text(self, a, rules) -> None:
+        """ Customized extraction of article text
+        :param Article a: article
+        :param Mapping[Literal['text', 'remove_text'], str] rules: xpaths
+        """
+
+        if rules.get('remove_text'):
+            deque(map(a.top_node.remove, a.top_node.xpath(rules)), maxlen=0)
+
+        if rules.get('text'):
+            output_formatter = OutputFormatter(a.config)
+            text, _ = output_formatter.get_formatted(a.top_node)
+            a.set_text(text)
+
     def parse_post_time(self, r, a: Article, xpath=None, coerce=False) -> str or datetime.datetime:
         """
         Guess the publication time from the article.
         Tries few heuristics first, then attempt extraction from xpath if any,
-        fails over to today, iff all of above had fail.
+        fails over to today, iff all of the above had fail.
 
         :param r: the response
         :param Article a: the article, as parsed by the newspaper3k library
@@ -324,7 +346,6 @@ class BasePostCrawler(PostCrawlerMixin, CrawlSpider, metaclass=PostCrawlerMeta):
         logo, status = (imgs[0], OK) if imgs else (None, FAILED)
         self.log_debug(f"{status:<{PADDING}} parsing logo for brand '{self.source.brand}' "
                        f"(out of {len(imgs)} images): {str(logo)}")
-
         return logo
 
     def parse_post(self, response, type, rules) -> Post:

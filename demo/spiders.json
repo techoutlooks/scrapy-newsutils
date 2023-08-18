@@ -8,11 +8,11 @@
     "language": "fr",
     "rule_sets": {
         "featured": {
-          "text": ".//*[contains(concat(\" \",normalize-space(@class),\" \"),\" post-slider-link \")]",
+          "link": ".//*[contains(concat(\" \",normalize-space(@class),\" \"),\" post-slider-link \")]",
           "images": ".//*[contains(concat(\" \",normalize-space(@class),\" \"),\" img-article-details \")]//@src"
         },
         "default": {
-          "text": ".//*[contains(concat(\" \",normalize-space(@class),\" \"),\" post-link \")]",
+          "link": ".//*[contains(concat(\" \",normalize-space(@class),\" \"),\" post-link \")]",
           "images": ".//*[contains(concat(\" \",normalize-space(@class),\" \"),\" img-article-details \")]//@src"
         }
     }
@@ -26,11 +26,11 @@
     "language": "fr",
     "rule_sets": {
         "featured": {
-          "text": ".//*[@id=\"tdi_75\"]//a",
+          "link": ".//*[@id=\"tdi_75\"]//a",
           "images": "//figure/img/@src"
         },
         "default": {
-          "text": ".//*[contains(concat(\" \",normalize-space(@class),\" \"),\" tdi_127 \")]//a",
+          "link": ".//*[contains(concat(\" \",normalize-space(@class),\" \"),\" tdi_127 \")]//a",
           "images": "//figure/img/@src"
         }
     }
@@ -44,11 +44,11 @@
     "language": "fr",
     "rule_sets": {
         "featured": {
-          "text": ".//article[contains(concat(\" \",normalize-space(@class),\" \"),\" listing-item-classic \")]//a[contains(concat(\" \",normalize-space(@class),\" \"),\" post-url \")]",
+          "link": ".//article[contains(concat(\" \",normalize-space(@class),\" \"),\" listing-item-classic \")]//a[contains(concat(\" \",normalize-space(@class),\" \"),\" post-url \")]",
           "images": ["//article//img/@src", "//article//img/@data-src"]
         },
         "default": {
-          "text": "//span[contains(concat(\" \",normalize-space(@class),\" \"),\" h-text \") and text()=\"DERNIÈRES NOUVELLES\"]/following::div[1]//article//a[@title]",
+          "link": "//span[contains(concat(\" \",normalize-space(@class),\" \"),\" h-text \") and text()=\"DERNIÈRES NOUVELLES\"]/following::div[1]//article//a[@title]",
           "images": "//article//img/@src | //article//img/@data-src"
         }
     }
@@ -67,11 +67,14 @@
     "language": "fr",
     "rule_sets": {
       "featured": {
-        "text": ".//*[contains(concat(\" \",normalize-space(@class),\" \"),\" contentInsets \")]//div//a",
+        "link": ".//*[contains(concat(\" \",normalize-space(@class),\" \"),\" contentInsets \")]//div//a",
+        "remove_text": "//p[contains(concat(\" \",normalize-space(@class),\" \"),\" label \")]",
         "images": "//*[contains(concat(\" \",normalize-space(@class),\" \"),\" label \")]/following-sibling::p/following-sibling::*[1]/self::p//img/@src"
       },
       "default": {
-        "text": "//*[(@id = \"appendable\")]//a",
+        "link": "//*[(@id = \"appendable\")]//a",
+        "text": "//p[contains(concat(\" \",normalize-space(@class),\" \"),\" label \")]",
+        "remove_text": "//p[contains(concat(\" \",normalize-space(@class),\" \"),\" label \")]",
         "images": "//*[contains(concat(\" \",normalize-space(@class),\" \"),\" label \")]/following-sibling::p/following-sibling::*[1]/self::p//img/@src"
       }
     }
@@ -89,11 +92,11 @@
     "language": "fr",
     "rule_sets": {
       "featured": {
-        "text": ".//*[@id=\"featured-posts\"]//*[contains(concat(\" \",normalize-space(@class),\" \"),\" featured-title \")]//a",
+        "link": ".//*[@id=\"featured-posts\"]//*[contains(concat(\" \",normalize-space(@class),\" \"),\" featured-title \")]//a",
         "images": ".//article//img"
       },
       "default": {
-        "text": ".//article//*[contains(concat(\" \",normalize-space(@class),\" \"),\" post-box-title \")]//a",
+        "link": ".//article//*[contains(concat(\" \",normalize-space(@class),\" \"),\" post-box-title \")]//a",
         "images": ".//article//img"
       }
     }
@@ -111,11 +114,11 @@
     "language": "fr",
     "rule_sets": {
       "featured": {
-        "text": ".//a[contains(concat(\" \",normalize-space(@class),\" \"),\" module_main_post_title \")]",
+        "link": ".//a[contains(concat(\" \",normalize-space(@class),\" \"),\" module_main_post_title \")]",
         "images": ".//*[contains(concat(\" \",normalize-space(@class),\" \"),\" post_video \")]//img"
       },
       "default": {
-        "text": ".//a[contains(concat(\" \",normalize-space(@class),\" \"),\" module_hot_title \")]",
+        "link": ".//a[contains(concat(\" \",normalize-space(@class),\" \"),\" module_hot_title \")]",
         "images": ".//*[contains(concat(\" \",normalize-space(@class),\" \"),\" post_video \")]//img"
       }
     }
@@ -134,11 +137,11 @@
     "language": "fr",
     "rule_sets": {
       "featured": {
-        "text": ".//*[contains(concat(\" \",normalize-space(@class),\" \"),\" fratmat-main-widget-style-one \")]//*[contains(concat(\" \",normalize-space(@class),\" \"),\" article-title \")]",
+        "link": ".//*[contains(concat(\" \",normalize-space(@class),\" \"),\" fratmat-main-widget-style-one \")]//*[contains(concat(\" \",normalize-space(@class),\" \"),\" article-title \")]",
         "images": "//*[contains(concat(\" \",normalize-space(@class),\" \"),\" label \")]/following-sibling::p/following-sibling::*[1]/self::p//img/@src"
       },
       "default": {
-        "text": ".//*[contains(concat(\" \",normalize-space(@class),\" \"),\" ajaxArticles \")]//*[contains(concat(\" \",normalize-space(@class),\" \"),\" article-title \")]",
+        "link": ".//*[contains(concat(\" \",normalize-space(@class),\" \"),\" ajaxArticles \")]//*[contains(concat(\" \",normalize-space(@class),\" \"),\" article-title \")]",
         "images": ".//*[contains(concat(\" \",normalize-space(@class),\" \"),\" fratmat-article-details \")]//picture//img"
       }
     }
@@ -158,12 +161,12 @@
     "rule_sets": {
       "featured": {
         "published": ".//*[contains(concat(\" \",normalize-space(@class),\" \"),\" date \")]",
-        "text": ".//*[contains(concat(\" \",normalize-space(@class),\" \"),\" section-alaune \")]//a",
+        "link": ".//*[contains(concat(\" \",normalize-space(@class),\" \"),\" section-alaune \")]//a",
         "images": ".//article//*[contains(concat(\" \",normalize-space(@class),\" \"),\" visuel \")]//img/@data-original"
       },
       "default": {
         "published": ".//*[contains(concat(\" \",normalize-space(@class),\" \"),\" date \")]",
-        "text": ".//a[contains(concat(\" \",normalize-space(@class),\" \"),\" ebloc-mini \")]",
+        "link": ".//a[contains(concat(\" \",normalize-space(@class),\" \"),\" ebloc-mini \")]",
         "images": ".//article//*[contains(concat(\" \",normalize-space(@class),\" \"),\" visuel \")]//img/@data-original"
       }
     }
@@ -181,11 +184,11 @@
     "language": "fr",
     "rule_sets": {
       "featured": {
-        "text": ".//a[contains(concat(\" \",normalize-space(@class),\" \"),\" hk-gridunit-imglink \")]",
+        "link": ".//a[contains(concat(\" \",normalize-space(@class),\" \"),\" hk-gridunit-imglink \")]",
         "images": ".//img[contains(concat(\" \",normalize-space(@class),\" \"),\" wp-post-image \")]"
       },
       "default": {
-        "text": ".//a[contains(concat(\" \",normalize-space(@class),\" \"),\" post-list-link \")]",
+        "link": ".//a[contains(concat(\" \",normalize-space(@class),\" \"),\" post-list-link \")]",
         "images": ".//img[contains(concat(\" \",normalize-space(@class),\" \"),\" wp-post-image \")]"
       }
     }
