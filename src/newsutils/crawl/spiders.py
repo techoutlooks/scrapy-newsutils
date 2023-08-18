@@ -30,6 +30,7 @@ nltk.download('punkt')
 
 
 __all__ = [
+    "PostRuleSets",
     "PostCrawlerMeta", "PostCrawlerMixin", "BasePostCrawler", "PostCrawlerContext",
     "DEFAULT_POST", "FEATURED_POST"
 ]
@@ -43,6 +44,9 @@ config.request_timeout = 10
 # default post types
 DEFAULT_POST = "default"
 FEATURED_POST = "featured"
+
+
+PostRuleSets = Mapping[Literal["link", "text", "images", "published"], str]
 
 
 class PostCrawlerMeta(abc.ABCMeta):
@@ -63,11 +67,12 @@ class PostCrawlerMeta(abc.ABCMeta):
         # chance to initialise `.settings` and connect the `spider_closed` signal
         # https://stackoverflow.com/a/27514672, https://stackoverflow.com/a/25352434
         crawler.rules = [
-            Rule(LinkExtractor(restrict_xpaths=[xpath]),
-                 callback='parse_post',
-                 cb_kwargs={TYPE: post_type, 'rules': rules},
-                 follow=False)
-            # rules -> Mapping['url'|'text'|'images', XPath] of both text and images
+            Rule(
+                LinkExtractor(restrict_xpaths=[xpath]),
+                cb_kwargs={TYPE: post_type, 'rules': rules}, callback='parse_post',
+                follow=False,
+            )
+            # rules -> PostRuleSets of both text and images
             for post_type, rules in crawler.rule_sets.items()
             for (mimetype, xpath) in (rules or {}).items() if mimetype == 'link'
         ]
@@ -78,7 +83,7 @@ class PostCrawlerMeta(abc.ABCMeta):
         # TODO: yaml validation (TODO: first, store spider context as yaml field)
         assert crawler.rule_sets and filter(None, crawler.rule_sets.values()), \
             "`rule_sets` must be a mapping of post_type (eg. 'default', 'featured'), " \
-            "with values resp. Mapping['text'|'images'|'published', XPath]"
+            "with values resp. PostRuleSets"
 
 
 class PostCrawlerMixin(LoggingMixin):
@@ -107,7 +112,7 @@ class PostCrawlerMixin(LoggingMixin):
     # By default, we define below two extraction rules called 'default', 'featured'
     # suitable for common use-cases, to lookup resp. regular, and featured posts.
     # https://devhints.io/xpath
-    rule_sets: Mapping[str, Mapping[Literal["url", "text", "images", "published"], str]] = {
+    rule_sets: Mapping[str, PostRuleSets] = {
         FEATURED_POST: None,
         DEFAULT_POST: None,
     }
@@ -115,7 +120,7 @@ class PostCrawlerMixin(LoggingMixin):
     def parse_post(self, response, type, rules) -> Post:
         """
         :param str type: post type
-        :param Mapping[Literal["text", "images", "published"], str] rules: set of xpath strings pointers
+        :param PostRuleSets rules: set of xpath strings pointers
             for extracting text and images urls, as well as the publication date from an article.
         """
 
@@ -123,18 +128,18 @@ class PostCrawlerMixin(LoggingMixin):
         a.download()
         a.parse()
 
-        # required to parse summary, keywords, etc.
-        # FIXME: set NLP language to that of post
-        #   based on the scraper's country, language props.
-        a.nlp()
-
-        short_link = a.url.replace(a.source_url, '')
-
         # custom text extraction from article
         self.set_post_text(a, rules=dict(
             text=rules.get('text'),
             remove_text=rules.get('remove_text'),
         ))
+
+        # required to parse summary, keywords, etc.
+        # based off the article's .text, hence called after .parse()
+        # FIXME: set NLP language to that of post based on the scraper's country, language props.
+        a.nlp()
+
+        short_link = a.url.replace(a.source_url, '')
 
         # quit processing posts that'll eventually get dropped by pipelines
         # cf. `newsutils.pipelines.FilterDate`
@@ -183,18 +188,46 @@ class PostCrawlerMixin(LoggingMixin):
         return post
 
     def set_post_text(self, a, rules) -> None:
-        """ Customized extraction of article text
+        """
+        Customized extraction of article text
+        Works by setting the node (`top_node`) whom to extract text from,
+        then dropping nodes containing undesirable text (`remove_text`) from it.
+
         :param Article a: article
-        :param Mapping[Literal['text', 'remove_text'], str] rules: xpaths
+        :param PostRuleSets rules: xpaths
         """
 
-        if rules.get('remove_text'):
-            deque(map(a.top_node.remove, a.top_node.xpath(rules)), maxlen=0)
+        # top_node is the basis of text extraction
+        # cf. newspaper.Article.parse()
+        if not a.top_node:
+            return a.text
 
-        if rules.get('text'):
-            output_formatter = OutputFormatter(a.config)
-            text, _ = output_formatter.get_formatted(a.top_node)
-            a.set_text(text)
+        texts = []
+        r = rules.get('text')
+        for root_xpath in (r if isinstance(r, (list, tuple)) else [r]):
+
+            try:
+                # node to extract text from (take first matching only)
+                top_node = next(iter(a.top_node.xpath(root_xpath)), a.top_node) \
+                    if root_xpath else a.top_node
+
+                # drop children nodes containing undesirable text
+                # Nota: call .remove() on parent element only!
+                if r := rules.get('remove_text'):
+                    for xpath in (r if isinstance(r, (list, tuple)) else [r]):
+                        deque(map(lambda e: e.getparent().remove(e),
+                                  top_node.xpath(xpath)), maxlen=0)
+
+                # actual text extraction
+                output_formatter = OutputFormatter(a.config)
+                text, _ = output_formatter.get_formatted(top_node)
+                texts.append(text or top_node.text)
+
+            except Exception as e:
+                self.log_info(f'{FAILED:<{PADDING}}{p}')
+                self.log_debug(str(e))
+
+        a.set_text("\n\n".join(texts))
 
     def parse_post_time(self, r, a: Article, xpath=None, coerce=False) -> str or datetime.datetime:
         """
@@ -241,7 +274,7 @@ class PostCrawlerMixin(LoggingMixin):
 
         :param HtmlResponse r: the response
         :param Article a: the article, as parsed by the newspaper3k library
-        :param str xpath: xpath locator for the article's publication time
+        :param str or [str] xpath: xpath locator for the article's publication time
 
         TODO: move to pipeline?  burden of image parsing if the post
             might be later deleted by the `DropNoqaImages`

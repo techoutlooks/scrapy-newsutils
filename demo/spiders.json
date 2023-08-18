@@ -68,13 +68,26 @@
     "rule_sets": {
       "featured": {
         "link": ".//*[contains(concat(\" \",normalize-space(@class),\" \"),\" contentInsets \")]//div//a",
-        "remove_text": "//p[contains(concat(\" \",normalize-space(@class),\" \"),\" label \")]",
+        "text": [
+          "//p[contains(concat(\" \",normalize-space(@class),\" \"),\" summary_label \")]",
+          "//div[@id=\"printable\"][contains(concat(\" \",normalize-space(@class),\" \"),\" text_body \")]"
+        ],
+        "remove_text": [
+          "//p[contains(concat(\" \",normalize-space(@class),\" \"),\" label \")]",
+          "//div[contains(concat(\" \",normalize-space(@class),\" \"),\" adcanevas \")]"
+        ],
         "images": "//*[contains(concat(\" \",normalize-space(@class),\" \"),\" label \")]/following-sibling::p/following-sibling::*[1]/self::p//img/@src"
       },
       "default": {
         "link": "//*[(@id = \"appendable\")]//a",
-        "text": "//p[contains(concat(\" \",normalize-space(@class),\" \"),\" label \")]",
-        "remove_text": "//p[contains(concat(\" \",normalize-space(@class),\" \"),\" label \")]",
+        "text": [
+          "//p[contains(concat(\" \",normalize-space(@class),\" \"),\" summary_label \")]",
+          "//div[@id=\"printable\"][contains(concat(\" \",normalize-space(@class),\" \"),\" text_body \")]"
+        ],
+        "remove_text": [
+          "//p[contains(concat(\" \",normalize-space(@class),\" \"),\" label \")]",
+          "//div[contains(concat(\" \",normalize-space(@class),\" \"),\" adcanevas \")]"
+        ],
         "images": "//*[contains(concat(\" \",normalize-space(@class),\" \"),\" label \")]/following-sibling::p/following-sibling::*[1]/self::p//img/@src"
       }
     }
@@ -160,13 +173,13 @@
     "language": "fr",
     "rule_sets": {
       "featured": {
-        "published": ".//*[contains(concat(\" \",normalize-space(@class),\" \"),\" date \")]",
         "link": ".//*[contains(concat(\" \",normalize-space(@class),\" \"),\" section-alaune \")]//a",
+        "published": ".//*[contains(concat(\" \",normalize-space(@class),\" \"),\" date \")]",
         "images": ".//article//*[contains(concat(\" \",normalize-space(@class),\" \"),\" visuel \")]//img/@data-original"
       },
       "default": {
-        "published": ".//*[contains(concat(\" \",normalize-space(@class),\" \"),\" date \")]",
         "link": ".//a[contains(concat(\" \",normalize-space(@class),\" \"),\" ebloc-mini \")]",
+        "published": ".//*[contains(concat(\" \",normalize-space(@class),\" \"),\" date \")]",
         "images": ".//article//*[contains(concat(\" \",normalize-space(@class),\" \"),\" visuel \")]//img/@data-original"
       }
     }
