@@ -5,7 +5,7 @@ from scrapy.utils.project import get_project_settings
 
 from .globals import get_setting
 from .constants import TaskTypes, EXCERPT, TITLE, TEXT
-from ..helpers import add_fullstop, import_attr, evalfn, classproperty, compose
+from ..helpers import punctuate, import_attr, evalfn, classproperty, compose
 from ..logging import TaskLoggerMixin
 from ..storage import upload_blob_from_url
 
@@ -88,7 +88,7 @@ class PostConfigMeta(abc.ABCMeta):
             'versioning': ['edits_excluded_fields', 'edits_new_version_fields', 'edits_pristine_threshold',
                            'edits_new_version_threshold'],
             'nlp': ['caption_field', 'category_field', 'summary_field', 'siblings_field', 'related_field',
-                    'summary_minimum_length', 'nlp_uses_excerpt', 'meta_uses_nlp'],
+                    'sum_score_field', 'summary_minimum_length', 'nlp_uses_excerpt', 'meta_uses_nlp'],
         }
 
         new_attrs = {f: classproperty(make_fget(f))
@@ -105,7 +105,7 @@ class PostConfigMixin(BaseConfigMixin, metaclass=PostConfigMeta):
 
     @classproperty
     def metapost_fields(self):
-        return [self.category_field, self.caption_field, self.summary_field]
+        return [self.category_field, self.caption_field, self.summary_field, self.sum_score_field]
 
     @property
     def similarity(self):
@@ -164,9 +164,8 @@ class PostStrategyMixin(PostConfigMixin):
             """
             Get all meaningful text from post, post's title and body alike.
 
-            :param bool meta: a metapost being generated,
-                    but `post` is unaware (post.is_meta not set yet)
             :param Post post: the post item
+            :param bool meta: a metapost being generated, but post.is_meta not set yet
             :param int minimum_length: minimum text length required
             """
             if not post:
@@ -182,7 +181,7 @@ class PostStrategyMixin(PostConfigMixin):
                 title, text = (cls.caption_field if cls.meta_uses_nlp else TITLE,
                                cls.summary_field if cls.meta_uses_nlp else TEXT)
 
-            post_text = add_fullstop(post[title]) + " " + (post[text] or "")
+            post_text = punctuate(post[title]) + " " + (post[text] or "")
             if len(post_text) < int(minimum_length or cls.summary_minimum_length):
                 post_text = None
 

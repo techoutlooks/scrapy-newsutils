@@ -10,7 +10,7 @@ from newsnlp.ad import extract_domain, AD_LABEL_COLUMN
 from newsutils.conf import LINK, TaskTypes, SHORT_LINK, LINK_HASH
 from newsutils.conf.mixins import PostConfigMixin
 from newsutils.crawl import Day
-from newsutils.helpers import wordcount, uniquedicts, dictdiff, add_fullstop, compose, strjoin
+from newsutils.helpers import wordcount, uniquedicts, dictdiff, punctuate, compose, strjoin, setdeep
 from newsutils.crawl.items import BOT, THIS_PAPER
 from newsutils.conf.post_item import Post, mk_post
 from newsutils.conf import \
@@ -170,7 +170,7 @@ class DayNlp(Day):
         # uses tfidf model to vectorise title+text of entire article corpus
         # `.similarity` holds params for the model's `similar_to` api.
         similar, saved = {}, 0
-        log_msg = \
+        log_msg = lambda saved: \
             f"{'' if saved else 'NOT'} saving `{list(self.similarity)}` similarity " \
             f"({saved}) siblings, for doc #{post[self.db_id_field]} ..."
 
@@ -192,7 +192,7 @@ class DayNlp(Day):
         try:
             if similar:
                 post = self.save(Post({**post, **similar}))
-            self.log_ok(log_msg)
+            self.log_ok(log_msg, saved)
 
         except Exception as exc:
             self.log_failed(log_msg, exc, saved)
@@ -209,56 +209,51 @@ class DayNlp(Day):
         :returns: saved (post, count).
         :rtype: (Post, int)
          """
+        saved = 0
+        log_msg = lambda saved: \
+            f"{'' if saved else 'NOT'} saving summary for doc #{post[self.db_id_field]} ..."
 
         # don't attempt summarising if min text length requirement not met
         text = self.get_decision("get_post_text")(post)
         if not text:
             return post, 0
 
-        summary, caption, categories = self.get_summary(text)
-        category = categories[0][0] if categories else CATEGORY_NOT_FOUND
-
-        log_msg = \
-            f"generating `summary` for doc #`{post[self.db_id_field]}`: " \
-            f"summary: ({wordcount(summary)}/{wordcount(text)}) words, " \
-            f"caption: ({wordcount(caption)}/{wordcount(post[TITLE])}) words, " \
-            f"category: `{category}`."
-
         try:
-            post = self.save(Post({
-                **post,
-                self.caption_field: caption,
-                self.summary_field: summary,
-                self.category_field: category}))
-            self.log_ok(log_msg)
+            self.set_summary(text, post)
+            post = self.save(post)
+            self.log_ok(log_msg, saved)
 
         except Exception as exc:
-            self.log_failed(log_msg, exc)
+            self.log_failed(log_msg, exc, saved)
 
         saved = int(bool(post))
         self.counts["summary"] += saved
+
         return post, saved
 
     def save_metapost(self, src: Post, **kwargs):
         """ Generate a meta post from given post's siblings,
-         and save it to the database in the same collection. """
+         and save it to the database in the same collection.
+
+             - checks if exists a previous version of metapost in the db.
+             - only alters posts with same type, ie. `metapost.*`
+         """
 
         metapost, saved = None, 0
-        log_msg = \
-            f"generating `{METAPOST}` " \
+        log_msg = lambda saved: \
+            f"{'' if saved else 'NOT'} saving `{METAPOST}` " \
             f"{'#' + str(metapost[self.db_id_field]) if metapost else ''} " \
             f"for post #{src[self.db_id_field]}: "
 
-        metapost, lookup_version = self.mk_metapost(src, **kwargs)
-        if metapost:
-            try:
-                # checks if exists a previous version of metapost in the db.
-                # only alters posts with same type, ie. `metapost.*`
-                metapost = self.save(metapost, only=(TYPE,),
-                                     id_field_or_match={'version': lookup_version})
-                self.log_ok(log_msg)
-            except Exception as exc:
-                self.log_failed(log_msg, exc)
+        try:
+            metapost, lookup_version = self.mk_metapost(src, **kwargs)
+            if metapost:
+                metapost = self.save(metapost, only=(TYPE,), id_field_or_match={
+                    'version': lookup_version})
+            self.log_ok(log_msg, saved)
+
+        except Exception as exc:
+            self.log_failed(log_msg, exc, saved)
 
         saved = int(bool(metapost))
         self.counts[METAPOST] += saved
@@ -292,14 +287,14 @@ class DayNlp(Day):
         # TODO: strategy to get metapost from other methods than TF-IDF, eg. kNN, kernels?
         siblings = self.get_similar(src, from_field=self.siblings_field)
         siblings, _ = zip(*siblings) if siblings else ([], [])
-        siblings_texts = [self.get_decision("get_post_text")(p, meta=True) for p in siblings]
-        _text = " ".join([add_fullstop(t) for t in filter(None, siblings_texts)])
+        texts = map(lambda p: self.get_decision("get_post_text")(p, meta=True), [src, *siblings])
+        texts = " ".join([punctuate(t) for t in filter(None, texts)])
 
         # skip if no _text, ie., no siblings found to infer metaposts
-        if not _text:
+        if not siblings or not texts:
             return metapost, lookup_version
 
-        metapost = mk_post()
+        metapost = mk_post({self.sum_score_field: {}})
 
         # `lookup_version`: possible existing database version of this metapost
         # It corresponds to previous siblings of this post, ie. that were not added by the current process.
@@ -310,14 +305,11 @@ class DayNlp(Day):
         # ie. after `.save_similarity()` may have added more siblings to `src` post.
         metapost[VERSION] = self.mk_metapost_version(siblings)
 
-        # NLP fields. Models inference happen here.
-        summary, caption, categories = self.get_summary(_text)
-        category = categories[0][0] if categories else CATEGORY_NOT_FOUND
-        metapost[self.category_field] = category
-        metapost[self.caption_field] = caption
-        metapost[self.summary_field] = summary
+        # Set summary, caption, category along with resp. scores
+        # Summarization inference happens here.
+        self.set_summary(texts, metapost)
 
-        # siblings & related
+        # set siblings & related fields
         # from src post
         metapost[self.siblings_field] = src[self.siblings_field]
         metapost[self.related_field] = src[self.related_field]
@@ -359,12 +351,17 @@ class DayNlp(Day):
             ''.join([str(p[self.db_id_field]) for p in _posts]).encode()
         ).hexdigest()
 
-    def get_summary(self, text: str):
+    def summarize(self, text: str):
+        """ Get abstractive summarization of post text
+        as summary text, caption (title) and category along with respective scores """
 
-        summary = self.text_summarizer(text)
-        caption = self.title_summarizer(text)
-        categories = self.categorizer(text)
-        return summary, caption, categories
+        category_n_score = categories[0] if (categories := self.categorizer(text)) \
+            else (CATEGORY_NOT_FOUND, 0)
+        return zip(
+            self.text_summarizer(text),
+            self.title_summarizer(text),
+            category_n_score
+        )
 
     def get_similar(self, post, from_field=None, **kwargs):
         """
@@ -417,3 +414,31 @@ class DayNlp(Day):
                         related += [(post, db_post)]  # return existing value for field as well
 
         return related
+
+    def set_summary(self, input_text: str, post: Post, raise_exc=True) -> None:
+        """
+        Perform text summarization and update post with the results.
+        Sets the summary, caption, category of post, along with their respective score.
+        """
+        log_msg = lambda detail=None: \
+            f"generating `summary` for doc #`{post[self.db_id_field] or 'new doc'}`: {detail}"
+
+        try:
+            (summary, caption, category), scores = self.summarize(input_text)
+            post[self.category_field] = category
+            post[self.caption_field] = caption
+            post[self.summary_field] = summary
+            setdeep(post, f"{self.sum_score_field}.summary", scores[0])
+            setdeep(post, f"{self.sum_score_field}.caption", scores[1])
+            setdeep(post, f"{self.sum_score_field}.category", scores[2])
+
+        except Exception as exc:
+            self.log_failed(log_msg, exc)
+            if raise_exc:
+                raise
+
+        ok_msg = f"summary: ({wordcount(summary)}/{wordcount(input_text)}) words, " \
+                 f"caption: ({wordcount(caption)}/{wordcount(post[TITLE])}) words, " \
+                 f"category: `{category}`."
+
+        self.log_ok(log_msg, ok_msg)

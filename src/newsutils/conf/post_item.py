@@ -78,6 +78,8 @@ class Post(Item, metaclass=PostMeta):
         return item
 
 
-# creates a post with default values
+# Creates a post with default values (set kwargs for custom fields/values).
+# Also sets initial values for fields, thanks to class `.utils.ItemValue`,
+# eg.: [] for plural fields, is_* -> bool, etc.
 # mk_defaultpost = lambda: Post(defaults=defaultpost)
 mk_post = lambda *args, **kwargs: Post(*args, defaults=defaultpost, **kwargs)

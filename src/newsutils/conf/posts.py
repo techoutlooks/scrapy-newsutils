@@ -17,12 +17,14 @@ settings_module = get_env('SCRAPY_SETTINGS_MODULE')
 # populated/persisted by the `NlpDaily` util class
 _nlp_base_fields_conf = {
 
-    # summarization
+    # summarization and score field
+    # for summary, caption and category
     "category_field": "category",
     "caption_field": "caption",
     "summary_field": "summary",
+    "sum_score_field": "score",
 
-    # similarity
+    # similarity (embeds resp. similarity scores)
     "siblings_field": "siblings",
     "related_field": "related",
 }

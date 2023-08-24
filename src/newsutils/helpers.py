@@ -28,6 +28,20 @@ getdeepattr = lambda obj, path: \
 getdeep = lambda obj, path: \
     reduce(lambda v, k: v.get(k, {}), path.split("."), obj)
 
+
+def setdeep(d, path, value):
+    """
+     Set dict's nested attribute without messing with sibling keys.
+    TODO: reframe to use reducer
+    """
+    dd = d
+    keys = path.split('.')
+    latest = keys.pop()
+    for k in keys:
+        dd = dd.setdefault(k, {})
+    dd[latest] = value
+
+
 hexoint = lambda hex: f"0x{str(hex)}"
 
 # facilitate regular set operations (union, difference, etc.),
@@ -78,12 +92,12 @@ def strjoin(d: dict, sep='='):
          for k, v in d.items()])
 
 
-def add_fullstop(sent: str):
+def punctuate(sent: str, mark='.'):
     """ add fullstop to sentence. """
     if not sent:
         return ""
     return sent if any([sent.endswith(_) for _ in ".!?…"]) \
-        else sent + "."
+        else sent + mark
 
 
 def camel_to_snake(name):
