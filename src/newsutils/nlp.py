@@ -220,13 +220,13 @@ class DayNlp(Day):
 
         try:
             self.set_summary(text, post)
-            post = self.save(post)
-            self.log_ok(log_msg, saved)
+            post = self.save(post)  # db post
+            saved = int(bool(post))
 
         except Exception as exc:
             self.log_failed(log_msg, exc, saved)
 
-        saved = int(bool(post))
+        self.log_ok(log_msg, saved)
         self.counts["summary"] += saved
 
         return post, saved
@@ -259,6 +259,85 @@ class DayNlp(Day):
         self.counts[METAPOST] += saved
         return metapost, saved
 
+    def get_similar(self, post, from_field=None, **kwargs):
+        """
+        Get (<post>, <similarity-score>) of posts similar to `post`,
+        having similarity score of equal or above value `kwargs['threshold']`
+
+        :param str from_field: re-run TF-IDF (the default)? or return post defaults.
+        :param Post post: post whose similar docs are sought
+        :param kwargs: optional params for `TfidfVectorizer`, (ie. `threshold`, `top_n`)
+        :returns: [(Post, int)] : [( <post>, <score>), ...] of similar docs
+        """
+
+        if from_field:
+            similar = self.expand_related(post, from_field)
+            similar = list(map(lambda args: (args[0], args[1].get(SCORE)), similar))
+
+        else:
+            post_i: int = self.posts.index(post)
+            similar = self.vectorizer.similar_to(post_i, **kwargs)
+            similar = [(self.posts[j], score) for j, score in similar]
+
+        log_msg = lambda post_score: \
+            f"found ({len(similar)}) docs similar to " \
+            f"#{post[self.db_id_field]} (@{post_score}) : " \
+            f"{', '.join(['#{} (@{:.2f})'.format(p[self.db_id_field], score) for p, score in list(similar)])}"
+
+        # threshold can't be recovered from db-saved post!
+        score = UNKNOWN if from_field else kwargs.get('threshold')
+        self.log_ok(log_msg, score)
+
+        return similar
+
+    def expand_related(self, post: Post, field: str):
+        """
+        Expand the posts referred to by the `field` attribute of given post
+        into plain Post objects
+
+        :returns [(Post, dict)]: list of resp. the referred-to post and
+                existing db value (value for `field`)
+        """
+        related: [Post] = []
+        db_related = post.get(field)
+        if db_related:
+            for db_post in db_related:
+                item_id = db_post.get(self.db_id_field)
+                if item_id:  # get the next post that matches
+                    post = next(filter(  # id of the related item
+                        lambda p: p[self.db_id_field] == item_id, self.posts), None)
+                    if post:
+                        related += [(post, db_post)]  # return existing value for field as well
+
+        return related
+
+    def set_summary(self, input_text: str, post: Post, raise_exc=True) -> None:
+        """
+        Perform text summarization and update post with the results.
+        Sets the summary, caption, category of post, along with their respective score.
+        """
+        log_msg = lambda detail=None: \
+            f"generating `summary` for doc #`{post[self.db_id_field] or 'new doc'}`: {detail}"
+
+        try:
+            (summary, caption, category), scores = self.summarize(input_text)
+            post[self.category_field] = category
+            post[self.caption_field] = caption
+            post[self.summary_field] = summary
+            setdeep(post, f"{self.sum_score_field}.summary", scores[0])
+            setdeep(post, f"{self.sum_score_field}.caption", scores[1])
+            setdeep(post, f"{self.sum_score_field}.category", scores[2])
+
+        except Exception as exc:
+            self.log_failed(log_msg, exc)
+            if raise_exc:
+                raise
+
+        ok_msg = f"summary: ({wordcount(summary)}/{wordcount(input_text)}) words, " \
+                 f"caption: ({wordcount(caption)}/{wordcount(post[TITLE])}) words, " \
+                 f"category: `{category}`."
+
+        self.log_ok(log_msg, ok_msg)
     def mk_metapost(self, src: Post, **kwargs):
         """ Generate a meta post by compiling all siblings
         of the given post, given the configured strategy.
@@ -362,83 +441,3 @@ class DayNlp(Day):
             self.title_summarizer(text),
             category_n_score
         )
-
-    def get_similar(self, post, from_field=None, **kwargs):
-        """
-        Get (<post>, <similarity-score>) of posts similar to `post`,
-        having similarity score of equal or above value `kwargs['threshold']`
-
-        :param str from_field: re-run TF-IDF (the default)? or return post defaults.
-        :param Post post: post whose similar docs are sought
-        :param kwargs: optional params for `TfidfVectorizer`, (ie. `threshold`, `top_n`)
-        :returns: [(Post, int)] : [( <post>, <score>), ...] of similar docs
-        """
-
-        if from_field:
-            similar = self.expand_related(post, from_field)
-            similar = list(map(lambda args: (args[0], args[1].get(SCORE)), similar))
-
-        else:
-            post_i: int = self.posts.index(post)
-            similar = self.vectorizer.similar_to(post_i, **kwargs)
-            similar = [(self.posts[j], score) for j, score in similar]
-
-        log_msg = lambda post_score: \
-            f"found ({len(similar)}) docs similar to " \
-            f"#{post[self.db_id_field]} (@{post_score}) : " \
-            f"{', '.join(['#{} (@{:.2f})'.format(p[self.db_id_field], score) for p, score in list(similar)])}"
-
-        # threshold can't be recovered from db-saved post!
-        score = UNKNOWN if from_field else kwargs.get('threshold')
-        self.log_ok(log_msg, score)
-
-        return similar
-
-    def expand_related(self, post: Post, field: str):
-        """
-        Expand the posts referred to by the `field` attribute of given post
-        into plain Post objects
-
-        :returns [(Post, dict)]: list of resp. the referred-to post and
-                existing db value (value for `field`)
-        """
-        related: [Post] = []
-        db_related = post.get(field)
-        if db_related:
-            for db_post in db_related:
-                item_id = db_post.get(self.db_id_field)
-                if item_id:  # get the next post that matches
-                    post = next(filter(  # id of the related item
-                        lambda p: p[self.db_id_field] == item_id, self.posts), None)
-                    if post:
-                        related += [(post, db_post)]  # return existing value for field as well
-
-        return related
-
-    def set_summary(self, input_text: str, post: Post, raise_exc=True) -> None:
-        """
-        Perform text summarization and update post with the results.
-        Sets the summary, caption, category of post, along with their respective score.
-        """
-        log_msg = lambda detail=None: \
-            f"generating `summary` for doc #`{post[self.db_id_field] or 'new doc'}`: {detail}"
-
-        try:
-            (summary, caption, category), scores = self.summarize(input_text)
-            post[self.category_field] = category
-            post[self.caption_field] = caption
-            post[self.summary_field] = summary
-            setdeep(post, f"{self.sum_score_field}.summary", scores[0])
-            setdeep(post, f"{self.sum_score_field}.caption", scores[1])
-            setdeep(post, f"{self.sum_score_field}.category", scores[2])
-
-        except Exception as exc:
-            self.log_failed(log_msg, exc)
-            if raise_exc:
-                raise
-
-        ok_msg = f"summary: ({wordcount(summary)}/{wordcount(input_text)}) words, " \
-                 f"caption: ({wordcount(caption)}/{wordcount(post[TITLE])}) words, " \
-                 f"category: `{category}`."
-
-        self.log_ok(log_msg, ok_msg)
