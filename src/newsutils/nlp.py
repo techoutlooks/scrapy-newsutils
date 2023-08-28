@@ -316,14 +316,19 @@ class DayNlp(Day):
         Perform text summarization and update post with the results.
         Sets the summary, caption, category of post, along with their respective score.
         """
-        log_msg = lambda detail=None: \
+        log_msg = lambda detail="": \
             f"generating `summary` for doc #`{post[self.db_id_field] or 'new doc'}`: {detail}"
 
         try:
+
+            # set summaries
             (summary, caption, category), scores = self.summarize(input_text)
             post[self.category_field] = category
             post[self.caption_field] = caption
             post[self.summary_field] = summary
+
+            # set scores
+            post[self.sum_score_field] = {}
             setdeep(post, f"{self.sum_score_field}.summary", scores[0])
             setdeep(post, f"{self.sum_score_field}.caption", scores[1])
             setdeep(post, f"{self.sum_score_field}.category", scores[2])

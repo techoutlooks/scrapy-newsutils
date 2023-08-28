@@ -48,7 +48,7 @@ logger._logger_name = __file__.rsplit("/", 1)[-1]
 _storage_client: storage.Client = None
 
 
-def get_storage_client(sa_json: str):
+def get_storage_client(sa_json: str=None):
     """
     requires env `GOOGLE_APPLICATION_CREDENTIALS`
     """
