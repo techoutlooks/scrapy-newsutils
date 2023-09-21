@@ -3,10 +3,7 @@
 This Python library makes scraping online articles a breeze. What you can do:
 
 * Download articles from any format into a standardized `Post` structure,
-* Gather posts by affinity, generates authentic titles and summaries from downloaded articles, etc.
-* Generate summary, caption, category for scraped content using NLP.
-* Generate meta summaries from posts grouped by affinty (concept of sibling posts) using NLP.
-* Remove ads and undesirable content using NLP.
+* Gather posts by affinity, generates authentic titles and summaries from articles or group of articles, etc.
 * Publish summarized posts to Telegram, Facebook and Twitter.
 * Initialise scrapers dynamically from database settings.
 * Create schedules to start crawl jobs.
