@@ -1,68 +1,31 @@
+# scrapy-newsutils
 
+This Python library makes scraping online articles a breeze. What you can do:
 
-## Features
-
-* Provides following two components for news fetching:
+* Download articles from any format into a standardized `Post` structure,
+* Gather posts by affinity, generates authentic titles and summaries from downloaded articles, etc.
+* Generate summary, caption, category for scraped content using NLP.
+* Generate meta summaries from posts grouped by affinty (concept of sibling posts) using NLP.
+* Remove ads and undesirable content using NLP.
+* Publish summarized posts to Telegram, Facebook and Twitter.
+* Initialise scrapers dynamically from database settings.
+* Create schedules to start crawl jobs.
+  
+It Provides following two major components for news fetching:
   - `newsutils.crawl` leverages Scrapy to crawl news.
   - `newsutils.ezines` downloads news by performing http requests to news API endpoints.
-* Initialises scrapers dynamically from database settings.
-* NLP summarization tasks: likely summary, caption, category of scraped posts
-* Publish summarized posts to social networks.
 
 
-### Optimisations 
+## Misc. Features
 
-* Supports `conda` envs suited for machine learning.
+* Skips duplicate articles while crawling.
+* Customizable names for article data fields.
+* Customizable strategies for text extraction `summary_as_text`
+* Comes with default settings overridable from the `.env` or `settings.py`
+* Supply fuly-functional base classes for building customized commands, spiders and configuration that consume NLP pipelines.
+* Mechanism to quit running a command if another instance is already running.
 
-* `scrapy nlp` command downloading 2G+ models data !
-It is recommended to mount the NLP data directories as a volume when using Docker.
-Cf. example multistage `Dockerfile` in the `leeram-news/newsbot` project.
-
-* Throttled e-zines API requests rate at thesportsdb.com
-  Configurable through env vars.
-
-
-* [TODO] Skip NLP inference, ie. quit generating a metapost if exists a metapost with the same version in the db
-  ie. iff same siblings detected.
-
-* [TODO] Create a single source of through for settings: settings.py, envs loaded by the run.py script
-  eg. SIMILARITY_RELATED_THRESHOLD, etc.
-
-
-* [TODO] [NER as middleware](https://github.com/vu3jej/scrapy-corenlp) -> new post field
-
-* [TODO] [Scrapy DeltaFetch](https://github.com/ScrapeOps/python-scrapy-playbook/tree/master/2_Scrapy_Guides) ensures that your scrapers only ever crawl the content once
-
-* [TODO] Bulk (batch) Insert to Database
-  append to some bucket during `process_item()`. to only flush to db during pieline's `close_spider()`
-  https://jerrynsh.com/5-useful-tips-while-working-with-python-scrapy/
-
-* [TODO] Move code for fetching post's `.images`, `.top_image` to Pipeline/Middleware
-  Currently parses/downloads images event for dup posts uti !
-    https://github.com/scrapy/scrapy/issues/2436
-    https://doc.scrapy.org/en/latest/topics/spider-middleware.html#scrapy.spidermiddlewares.SpiderMiddleware.process_spider_output
-
-
-### Feature request
-
-* Bypass scraper blocking
-
-  Refs: [1](https://scrapfly.io/blog/web-scraping-with-scrapy/)
-  Test the various plugins for proxy management, eg.:
-    - (scrapy-rotating-proxies)[https://github.com/TeamHG-Memex/scrapy-rotating-proxies],
-    - (scrapy-fake-useragent)[https://github.com/alecxe/scrapy-fake-useragent], for randomizing user agent headers.
-
-* Browser emulation and scraping dynamic pages (JS) using:
-    - scrapy-selenium (+GCP): 
-      [1](https://youtu.be/2LwrUu9yTAo),
-      [2](https://www.roelpeters.be/how-to-deploy-a-scraping-script-and-selenium-in-google-cloud-run/)
-    - [scrapy-playwright](https://pypi.org/project/scrapy-playwright/)
-    - JS support via (Splash)[https://splash.readthedocs.io/en/stable/faq.html]  \
-      Won't do: seem to require running in docker container??
-* Migrate to Distributed scraping, eg. [Frontera](https://github.com/scrapinghub/frontera) 
-
-
-## Demo 
+## Usage 
 
 * Setup python env 
 ```shell
@@ -129,6 +92,58 @@ cf. `settings.CRAWL_DB_URI`. Eg., run following and import generated `spiders.js
     # redirects output to json file
     scrapy crawl gn-guineematin -O gn-guineematin.json
     ```
+
+
+### Optimisations 
+
+* Supports `conda` envs suited for machine learning.
+
+* `scrapy nlp` command downloading 2G+ models data !
+It is recommended to mount the NLP data directories as a volume when using Docker.
+Cf. example multistage `Dockerfile` in the `leeram-news/newsbot` project.
+
+* Throttled e-zines API requests rate at thesportsdb.com
+  Configurable through env vars.
+
+* [TODO] Skip NLP inference, ie. quit generating a metapost if exists a metapost with the same version in the db
+  ie. iff same siblings detected.
+
+* [TODO] Create a single source of through for settings: settings.py, envs loaded by the run.py script
+  eg. SIMILARITY_RELATED_THRESHOLD, etc.
+
+* [TODO] [NER as middleware](https://github.com/vu3jej/scrapy-corenlp) -> new post field
+
+* [TODO] [Scrapy DeltaFetch](https://github.com/ScrapeOps/python-scrapy-playbook/tree/master/2_Scrapy_Guides) ensures that your scrapers only ever crawl the content once
+
+* [TODO] Bulk (batch) Insert to Database
+  append to some bucket during `process_item()`. to only flush to db during pieline's `close_spider()`
+  https://jerrynsh.com/5-useful-tips-while-working-with-python-scrapy/
+
+* [TODO] Move code for fetching post's `.images`, `.top_image` to Pipeline/Middleware
+  Currently parses/downloads images event for dup posts uti !
+    https://github.com/scrapy/scrapy/issues/2436
+    https://doc.scrapy.org/en/latest/topics/spider-middleware.html#scrapy.spidermiddlewares.SpiderMiddleware.process_spider_output
+
+
+### Feature request
+
+* Bypass scraper blocking
+
+  Refs: [1](https://scrapfly.io/blog/web-scraping-with-scrapy/)
+  Test the various plugins for proxy management, eg.:
+    - (scrapy-rotating-proxies)[https://github.com/TeamHG-Memex/scrapy-rotating-proxies],
+    - (scrapy-fake-useragent)[https://github.com/alecxe/scrapy-fake-useragent], for randomizing user agent headers.
+
+* Browser emulation and scraping dynamic pages (JS) using:
+    - scrapy-selenium (+GCP): 
+      [1](https://youtu.be/2LwrUu9yTAo),
+      [2](https://www.roelpeters.be/how-to-deploy-a-scraping-script-and-selenium-in-google-cloud-run/)
+    - [scrapy-playwright](https://pypi.org/project/scrapy-playwright/)
+    - JS support via (Splash)[https://splash.readthedocs.io/en/stable/faq.html]  \
+      Won't do: seem to require running in docker container??
+      
+* Migrate to Distributed scraping, eg. [Frontera](https://github.com/scrapinghub/frontera) 
+
 
 
 
