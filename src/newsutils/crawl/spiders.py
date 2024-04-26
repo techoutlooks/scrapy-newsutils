@@ -221,7 +221,7 @@ class PostCrawlerMixin(LoggingMixin):
                 # actual text extraction
                 output_formatter = OutputFormatter(a.config)
                 text, _ = output_formatter.get_formatted(top_node)
-                texts.append(text or top_node.text)
+                texts.append(text or top_node.text or "")
 
             except Exception as e:
                 self.log_info(f'{FAILED:<{PADDING}}{p}')
