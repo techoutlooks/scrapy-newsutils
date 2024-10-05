@@ -1,4 +1,4 @@
-
+# scrapy-newsutils
 
 ## Features
 
@@ -73,11 +73,11 @@ Cf. example multistage `Dockerfile` in the `leeram-news/newsbot` project.
 
 * running MongoDb instance (required by `newsbot`, `newsapi`)
 
-    ```shell
-    docker run -d -p 27017:27017 --name mongodb \
-      -v pgdata:/var/lib/postgresql/data \
-      mongo:latest
-    ```
+```shell
+docker run -d -p 27017:27017 --name mongodb \
+  -v pgdata:/var/lib/postgresql/data \
+  mongo:latest
+```
   
 ### Demo
 
@@ -119,35 +119,62 @@ EOF
 ```
 
 * Define a posts spider dynamically. 
-Initialisation context is read from the database as part of the project.
-cf. `settings.DB_URI`. Eg., run following and import generated `spiders.json` to MongoDB \
+Initialisation context is read from the database as part of the project (env `settings.DB_URI`). 
+Eg., run following and import generated `_spiders.json` to MongoDB 
+
 **Nota**: Set the `.version` field to integer value `0` to disable a spider,
 otherwise loads latest version of any spider. 
 
-    ```shell
-    cat <<EOF >  spiders.json
-    [
-      {
-        "name": "gn-guineematin ",
-        "allowed_domains": ["guineematin.com"],
-        "start_urls": ["https://guineematin.com/"],
-        "country_code": "GN",
-        "language": "fr",
-        "post_images": "//figure/img/@src",
-        "rule_sets": {
-            "featured": "//*[(@id = \"tdi_82\")]//a | //*[(@id = \"tdi_84\")]//a",
-            "default": "//*[contains(concat( \" \", @class, \" \" ), concat( \" \", \"td-animation-stack\", \" \" ))]//a"
+```shell
+cat <<EOF >  fixtures/_spiders.json
+  [
+    {
+      "version": 1,
+      "name": "sn-igfm",
+      "allowed_domains": [
+        "igfm.sn"
+      ],
+      "start_urls": [
+        "https://igfm.sn/"
+      ],
+      "country_code": "SN",
+      "language": "fr",
+      "rule_sets": {
+        "featured": {
+          "link": ".//*[contains(concat(\" \",normalize-space(@class),\" \"),\" contentInsets \")]//div//a",
+          "text": [
+            "//p[contains(concat(\" \",normalize-space(@class),\" \"),\" summary_label \")]",
+            "//div[@id=\"printable\"][contains(concat(\" \",normalize-space(@class),\" \"),\" text_body \")]"
+          ],
+          "remove_text": [
+            "//p[contains(concat(\" \",normalize-space(@class),\" \"),\" label \")]",
+            "//div[contains(concat(\" \",normalize-space(@class),\" \"),\" adcanevas \")]"
+          ],
+          "images": "//*[contains(concat(\" \",normalize-space(@class),\" \"),\" label \")]/following-sibling::p/following-sibling::*[1]/self::p//img/@src"
+        },
+        "default": {
+          "link": "//*[(@id = \"appendable\")]//a",
+          "text": [
+            "//p[contains(concat(\" \",normalize-space(@class),\" \"),\" summary_label \")]",
+            "//div[@id=\"printable\"][contains(concat(\" \",normalize-space(@class),\" \"),\" text_body \")]"
+          ],
+          "remove_text": [
+            "//p[contains(concat(\" \",normalize-space(@class),\" \"),\" label \")]",
+            "//div[contains(concat(\" \",normalize-space(@class),\" \"),\" adcanevas \")]"
+          ],
+          "images": "//*[contains(concat(\" \",normalize-space(@class),\" \"),\" label \")]/following-sibling::p/following-sibling::*[1]/self::p//img/@src"
         }
       }
-    ]
-    ```
+    }
+  ]
+```
 
 * Run the spider (chdir to project directory)
 
-    ```shell
-    # redirects output to json file
-    scrapy crawl gn-guineematin -O gn-guineematin.json
-    ```
+```shell
+# redirects output to json file
+scrapy crawl gn-guineematin -O gn-guineematin.json
+```
 
 ## FIXES
 
